@@ -12,7 +12,7 @@ It gives Claude Code and Codex CLI a **persistent memory** that survives across 
 
 > **Save ~80-100K tokens per session** | **Skip the warmup, go straight to building** | **Zero config after install**
 
-[![Version](https://img.shields.io/badge/version-3.0-orange.svg)](#)
+[![Version](https://img.shields.io/badge/version-3.1.0-orange.svg)](#)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-green.svg)](https://www.python.org/)
 [![MCP Server](https://img.shields.io/badge/MCP-13%20tools-purple.svg)](https://modelcontextprotocol.io/)

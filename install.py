@@ -17,6 +17,7 @@ from pathlib import Path
 COGNILAYER_HOME = Path.home() / ".cognilayer"
 CLAUDE_COMMANDS = Path.home() / ".claude" / "commands"
 REPO_DIR = Path(__file__).parent
+VERSION = (REPO_DIR / "VERSION").read_text(encoding="utf-8").strip()
 
 
 def _find_scripts_dir() -> Path | None:
@@ -177,6 +178,10 @@ def copy_files():
         shutil.copy2(helper_src, COGNILAYER_HOME / "onboard_helper.py")
         print("  [copy] onboard_helper.py")
 
+    # Copy VERSION file
+    shutil.copy2(REPO_DIR / "VERSION", COGNILAYER_HOME / "VERSION")
+    print(f"  [copy] VERSION ({VERSION})")
+
     # Install CLI wrapper (cognilayer command)
     install_cli_wrapper()
 
@@ -237,7 +242,7 @@ def main():
     target = "Codex CLI" if codex_mode else "Both" if both_mode else "Claude Code"
 
     print("=" * 50)
-    print(f"  CogniLayer Installer ({target})")
+    print(f"  CogniLayer v{VERSION} Installer ({target})")
     print("=" * 50)
     print()
 
@@ -268,7 +273,7 @@ def main():
         register_mcp(codex=codex_mode)
 
     print("\n" + "=" * 50)
-    print("  Installation complete!")
+    print(f"  CogniLayer v{VERSION} — Installation complete!")
     print("=" * 50)
     print()
     print("Next steps:")

@@ -392,9 +392,20 @@ async def main():
         await server.run(read_stream, write_stream, server.create_initialization_options())
 
 
+def get_version() -> str:
+    """Read version from VERSION file."""
+    version_file = Path(__file__).parent.parent / "VERSION"
+    if version_file.exists():
+        return version_file.read_text(encoding="utf-8").strip()
+    return "unknown"
+
+
 def test_tools():
     """Quick test to verify all tools are registered."""
     import asyncio
+
+    version = get_version()
+    print(f"CogniLayer v{version}")
 
     async def _test():
         tools = await list_tools()

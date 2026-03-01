@@ -18,10 +18,17 @@ from tui.screens.gaps import GapsScreen
 from tui.screens.contradictions import ContradictionsScreen
 
 
+def _get_version() -> str:
+    version_file = Path(__file__).parent.parent / "VERSION"
+    if version_file.exists():
+        return version_file.read_text(encoding="utf-8").strip()
+    return "3"
+
+
 class CogniLayerTUI(App):
     """CogniLayer Memory Dashboard."""
 
-    TITLE = "CogniLayer"
+    TITLE = f"CogniLayer v{_get_version()}"
     SUB_TITLE = "Memory Dashboard"
     CSS_PATH = "styles.tcss"
 
