@@ -89,9 +89,43 @@ def _resolve_gaps(db, project: str, content: str):
         pass  # Gap resolution is best-effort
 
 
+# Patterns that indicate secrets/credentials — MUST NOT be saved to memory
+_SECRET_PATTERNS = [
+    (r'(?:sk|pk)[-_](?:live|test|prod)[a-zA-Z0-9_\-]{20,}', "API key"),
+    (r'ghp_[a-zA-Z0-9]{36,}', "GitHub token"),
+    (r'github_pat_[a-zA-Z0-9_]{20,}', "GitHub PAT"),
+    (r'gho_[a-zA-Z0-9]{36,}', "GitHub OAuth token"),
+    (r'AKIA[0-9A-Z]{16}', "AWS access key"),
+    (r'(?:Bearer|token)\s+[a-zA-Z0-9_\-\.]{20,}', "Bearer/auth token"),
+    (r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----', "Private key"),
+    (r'(?:password|passwd|pwd)\s*[=:]\s*["\']?[^\s"\']{8,}', "Password"),
+    (r'(?:secret|api_key|apikey|access_token|auth_token)\s*[=:]\s*["\']?[a-zA-Z0-9_\-]{16,}', "Secret/token"),
+    (r'mongodb(?:\+srv)?://[^\s]+:[^\s]+@', "MongoDB connection string"),
+    (r'postgres(?:ql)?://[^\s]+:[^\s]+@', "PostgreSQL connection string"),
+    (r'mysql://[^\s]+:[^\s]+@', "MySQL connection string"),
+    (r'redis://:[^\s]+@', "Redis connection string"),
+    (r'xox[bporas]-[a-zA-Z0-9\-]{10,}', "Slack token"),
+    (r'sk-[a-zA-Z0-9_\-]{20,}', "OpenAI API key"),
+    (r'sk-ant-[a-zA-Z0-9_\-]{20,}', "Anthropic API key"),
+]
+
+
+def _check_secrets(content: str) -> str | None:
+    """Check content for potential secrets. Returns warning message or None."""
+    for pattern, label in _SECRET_PATTERNS:
+        if re.search(pattern, content, re.IGNORECASE):
+            return label
+    return None
+
+
 def memory_write(content: str, type: str = "fact", tags: str = None,
                  domain: str = None, source_file: str = None) -> str:
-    """Write a fact to CogniLayer memory with deduplication."""
+    """Write a fact to CogniLayer memory with deduplication and secrets filtering."""
+    # Security: block secrets from being saved
+    secret_type = _check_secrets(content)
+    if secret_type:
+        return t("memory_write.blocked_secret", secret_type=secret_type)
+
     session = get_active_session()
     project = session.get("project", "unknown")
     session_id = session.get("session_id", None)

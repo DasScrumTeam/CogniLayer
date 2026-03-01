@@ -125,6 +125,10 @@ _EN: dict[str, str] = {
     "memory_write.exists_unchanged": "Fact already exists (unchanged): {preview}...",
     "memory_write.updated": "Updated in memory: {preview}... [project: {project}, type: {type}]",
     "memory_write.saved": "Saved to memory: {preview}... [project: {project}, type: {type}]",
+    "memory_write.blocked_secret": (
+        "BLOCKED — Content appears to contain a secret ({secret_type}). "
+        "Secrets must NEVER be saved to memory. Remove the sensitive data and try again."
+    ),
 
     # ======================================================================
     # memory_delete.py
@@ -526,6 +530,10 @@ _CS: dict[str, str] = {
     "memory_write.exists_unchanged": "Fakt uz existuje (beze zmeny): {preview}...",
     "memory_write.updated": "Aktualizovano v pameti: {preview}... [projekt: {project}, typ: {type}]",
     "memory_write.saved": "Ulozeno do pameti: {preview}... [projekt: {project}, typ: {type}]",
+    "memory_write.blocked_secret": (
+        "BLOKOVANO — Obsah zrejme obsahuje secret ({secret_type}). "
+        "Secrets se NESMI ukladat do pameti. Odstraň citliva data a zkus znovu."
+    ),
 
     # ======================================================================
     # memory_delete.py
