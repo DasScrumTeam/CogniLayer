@@ -41,6 +41,9 @@ Thumbs.db
 # Claude Code
 CLAUDE.md
 
+# Local git hook (auto-deploy, dev-only)
+hooks/git-post-commit
+
 # PRD (internal docs, not for public)
 cognilayer-prd*.md
 Screenshots/
