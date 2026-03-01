@@ -399,6 +399,27 @@ _EN: dict[str, str] = {
     "session_end.emergency_header": "[Emergency bridge — running bridge was not updated]",
     "session_end.and_more": "  ... and {count} more",
     "session_end.no_changes": "No changes or facts in this session.",
+
+    # ======================================================================
+    # session_init.py (Codex MCP tool)
+    # ======================================================================
+    "tool.session_init.desc": (
+        "Initialize CogniLayer session. Replaces SessionStart hook for Codex CLI. "
+        "Returns DNA + bridge + crash recovery. Call this at the start of every session."
+    ),
+    "tool.session_init.param.project_path": (
+        "Path to the project directory. Auto-detects from CWD if not provided."
+    ),
+    "session_init.no_db": "CogniLayer DB not found. Run install first.",
+    "session_init.invalid_path": "Invalid project path: {path}",
+    "session_init.error": "Session init error: {error}",
+    "session_init.header": "## Session initialized for {project}\nSession ID: {session_id}",
+    "session_init.instructions": (
+        "## Reminders\n"
+        "- Use memory_write proactively to save findings\n"
+        "- At session end: session_bridge(action=\"save\", content=\"Progress: ...; Open: ...\")\n"
+        "- Before deploy/push: verify_identity(action_type=\"...\")"
+    ),
 }
 
 
@@ -773,6 +794,27 @@ _CS: dict[str, str] = {
     "session_end.emergency_header": "[Emergency bridge — running bridge nebyl aktualizovan]",
     "session_end.and_more": "  ... a {count} dalsich",
     "session_end.no_changes": "Zadne zmeny ani fakty v teto session.",
+
+    # ======================================================================
+    # session_init.py (Codex MCP tool)
+    # ======================================================================
+    "tool.session_init.desc": (
+        "Inicializuj CogniLayer session. Nahrazuje SessionStart hook pro Codex CLI. "
+        "Vraci DNA + bridge + crash recovery. Zavolej na zacatku kazde session."
+    ),
+    "tool.session_init.param.project_path": (
+        "Cesta k adresari projektu. Auto-detekce z CWD pokud neni zadano."
+    ),
+    "session_init.no_db": "CogniLayer DB nenalezena. Spust nejdriv install.",
+    "session_init.invalid_path": "Neplatna cesta k projektu: {path}",
+    "session_init.error": "Chyba pri inicializaci session: {error}",
+    "session_init.header": "## Session inicializovana pro {project}\nSession ID: {session_id}",
+    "session_init.instructions": (
+        "## Pripominky\n"
+        "- Pouzivej memory_write proaktivne pro ukladani poznatku\n"
+        "- Na konci session: session_bridge(action=\"save\", content=\"Progress: ...; Open: ...\")\n"
+        "- Pred deployem/pushem: verify_identity(action_type=\"...\")"
+    ),
 }
 
 

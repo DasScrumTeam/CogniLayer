@@ -1,0 +1,57 @@
+/* CogniLayer TUI Dashboard Styles */
+
+Screen {
+    background: $surface;
+}
+
+#header {
+    dock: top;
+    height: 3;
+    background: $primary;
+    color: $text;
+    text-align: center;
+    padding: 1;
+}
+
+TabbedContent {
+    height: 1fr;
+}
+
+ContentSwitcher {
+    height: 1fr;
+}
+
+TabPane {
+    height: 1fr;
+    padding: 0;
+}
+
+DataTable {
+    height: 1fr;
+}
+
+DataTable > .datatable--header {
+    background: $primary-background;
+    color: $text;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: $accent;
+}
+
+Tree {
+    height: 1fr;
+}
+
+#footer-bar {
+    dock: bottom;
+    height: 1;
+    background: $primary;
+    color: $text-muted;
+    padding: 0 1;
+}
+
+Select {
+    margin-left: 1;
+}

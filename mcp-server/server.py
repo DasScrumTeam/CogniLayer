@@ -1,7 +1,7 @@
-"""CogniLayer MCP Server — V3 (FTS5 + vector + linking + gap tracking + episodes + causal chains).
+"""CogniLayer MCP Server — V3 (FTS5 + vector + linking + gap tracking + episodes + causal chains + Codex).
 
-Entry point for the MCP server registered in ~/.claude/settings.json.
-Provides 12 tools for Claude Code to interact with CogniLayer memory.
+Entry point for the MCP server registered in ~/.claude/settings.json or ~/.codex/config.toml.
+Provides 13 tools for Claude Code / Codex CLI to interact with CogniLayer memory.
 """
 
 import sys
@@ -27,6 +27,7 @@ from tools.identity_set import identity_set
 from tools.recommend_tech import recommend_tech
 from tools.memory_link import memory_link
 from tools.memory_chain import memory_chain
+from tools.session_init import session_init
 from i18n import t
 
 server = Server("cognilayer")
@@ -284,6 +285,19 @@ async def list_tools() -> list[Tool]:
                 "required": ["cause_id", "effect_id"]
             }
         ),
+        Tool(
+            name="session_init",
+            description=t("tool.session_init.desc"),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_path": {
+                        "type": "string",
+                        "description": t("tool.session_init.param.project_path")
+                    }
+                }
+            }
+        ),
     ]
 
 
@@ -351,6 +365,10 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 effect_id=arguments["effect_id"],
                 relationship=arguments.get("relationship", "caused")
             )
+        elif name == "session_init":
+            result = session_init(
+                project_path=arguments.get("project_path")
+            )
         else:
             result = t("server.unknown_tool", name=name)
     except Exception as e:
@@ -392,10 +410,10 @@ def test_tools():
 if __name__ == "__main__":
     if "--test" in sys.argv:
         count = test_tools()
-        if count == 12:
+        if count == 13:
             print(f"\nOK: All {count} tools registered.")
         else:
-            print(f"\nERROR: Expected 12 tools, got {count}.")
+            print(f"\nERROR: Expected 13 tools, got {count}.")
             sys.exit(1)
     else:
         import asyncio

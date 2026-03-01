@@ -46,6 +46,8 @@ def copy_files():
         COGNILAYER_HOME / "hooks",
         COGNILAYER_HOME / "logs",
         COGNILAYER_HOME / "cache" / "embeddings",
+        COGNILAYER_HOME / "tui" / "screens",
+        COGNILAYER_HOME / "tui" / "widgets",
         CLAUDE_COMMANDS,
     ]
     for d in dirs_to_create:
@@ -68,6 +70,22 @@ def copy_files():
     for src_file in hooks_src.glob("*.py"):
         shutil.copy2(src_file, hooks_dst / src_file.name)
         print(f"  [copy] hooks/{src_file.name}")
+
+    # Copy TUI dashboard
+    tui_src = REPO_DIR / "tui"
+    tui_dst = COGNILAYER_HOME / "tui"
+    if tui_src.exists():
+        for src_file in tui_src.rglob("*.py"):
+            rel = src_file.relative_to(tui_src)
+            dst_file = tui_dst / rel
+            dst_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src_file, dst_file)
+            print(f"  [copy] tui/{rel}")
+        for src_file in tui_src.rglob("*.tcss"):
+            rel = src_file.relative_to(tui_src)
+            dst_file = tui_dst / rel
+            shutil.copy2(src_file, dst_file)
+            print(f"  [copy] tui/{rel}")
 
     # Copy config
     config_src = REPO_DIR / "config.yaml"
@@ -111,11 +129,16 @@ def init_database():
     print(f"  [ok] Database initialized: {len(all_names)} objects")
 
 
-def register_mcp():
-    """Register MCP server and hooks in Claude Code settings."""
+def register_mcp(codex: bool = False):
+    """Register MCP server and hooks in Claude Code or Codex CLI."""
     sys.path.insert(0, str(COGNILAYER_HOME / "hooks"))
-    from register import register
-    register()
+    sys.path.insert(0, str(COGNILAYER_HOME / "mcp-server"))
+    if codex:
+        from register_codex import register
+        register()
+    else:
+        from register import register
+        register()
 
 
 def test_server():
@@ -123,16 +146,20 @@ def test_server():
     sys.path.insert(0, str(COGNILAYER_HOME / "mcp-server"))
     from server import test_tools
     count = test_tools()
-    if count == 12:
+    if count == 13:
         print(f"\n[ok] All {count} tools registered successfully.")
     else:
-        print(f"\n[ERROR] Expected 12 tools, got {count}.")
+        print(f"\n[ERROR] Expected 13 tools, got {count}.")
         sys.exit(1)
 
 
 def main():
+    codex_mode = "--codex" in sys.argv
+    both_mode = "--both" in sys.argv
+    target = "Codex CLI" if codex_mode else "Both" if both_mode else "Claude Code"
+
     print("=" * 50)
-    print("  CogniLayer Installer")
+    print(f"  CogniLayer Installer ({target})")
     print("=" * 50)
     print()
 
@@ -150,8 +177,13 @@ def main():
     print("\n[4/5] Initializing database...")
     init_database()
 
-    print("\n[5/5] Registering in Claude Code...")
-    register_mcp()
+    print("\n[5/5] Registering...")
+    if both_mode:
+        register_mcp(codex=False)
+        print()
+        register_mcp(codex=True)
+    else:
+        register_mcp(codex=codex_mode)
 
     print("\n" + "=" * 50)
     print("  Installation complete!")
@@ -161,12 +193,19 @@ def main():
     print("  1. Edit ~/.cognilayer/config.yaml")
     print("     Set projects.base_path to your projects directory")
     print()
-    print("  2. Start Claude Code in any project:")
-    print("     cd ~/projects/my-app && claude")
+    if codex_mode:
+        print("  2. Start Codex CLI in any project:")
+        print("     cd ~/projects/my-app && codex")
+    else:
+        print("  2. Start Claude Code in any project:")
+        print("     cd ~/projects/my-app && claude")
     print()
     print("  3. Run /onboard to build initial memory")
     print()
     print("  4. Run /status to verify everything works")
+    print()
+    print("  5. Launch TUI dashboard:")
+    print("     python -m cognilayer.tui")
     print()
 
     # Optional: run test
