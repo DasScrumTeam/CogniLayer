@@ -1,16 +1,12 @@
 # CogniLayer v3
 
-### Your AI coding agent forgets everything. Every. Single. Session.
+### One brain. Two agents. All your projects.
 
-You spend 20 minutes explaining your project structure. Claude reads 15 files. You debug a tricky issue together. Then the session ends — and **it's all gone**.
+Use Claude Code in the morning, switch to Codex CLI in the afternoon — **they share the same memory.** Debug a tricky auth issue with Claude, open Codex later — it already knows what happened. No re-explaining, no re-reading files. That's not just persistent memory, that's **agent interoperability**.
 
-Next session? Start from zero. Re-read the same files. Re-explain the same architecture. Re-discover the same gotchas. Over and over.
+> **Shared memory between Claude Code & Codex CLI** | **Save ~80-100K tokens/session** | **Crash recovery** | **Cross-project intelligence**
 
-**CogniLayer fixes this.**
-
-It gives Claude Code and Codex CLI a **persistent memory** that survives across sessions, projects, and even crashes. Your AI assistant finally remembers what it learned.
-
-> **Save ~80-100K tokens per session** | **Skip the warmup, go straight to building** | **Zero config after install**
+CogniLayer gives your AI coding agents a **shared brain** — a local SQLite database with 13 MCP tools, hybrid search, and automatic session tracking. Every fact, decision, gotcha, and debugging session survives across sessions, agents, projects, and crashes.
 
 [![Version](https://img.shields.io/badge/version-3.1.0-orange.svg)](#)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
@@ -23,19 +19,20 @@ It gives Claude Code and Codex CLI a **persistent memory** that survives across 
 
 ## Why You Need This
 
-### Save money — literally
-Every session without CogniLayer, Claude re-reads your codebase from scratch. That's **80,000-100,000 wasted tokens per session**. At current API prices, CogniLayer pays for itself on day one.
+### Switch agents without losing context
+Claude Code and Codex CLI share the same memory database. Start a task with one, finish with the other. **No other tool does this.**
 
-### Stop repeating yourself
-*"This project uses Next.js with Supabase auth, the API routes are in /app/api, we deploy to Vercel, and NEVER use the old /pages directory..."*
+### Save 80-100K tokens per session
+Without CogniLayer, your agent re-reads the codebase from scratch every session. With it — a few KB of compact context injected via MCP. Pays for itself on day one.
 
-Sound familiar? With CogniLayer, you explain it **once**. It remembers forever.
+### Crash immunity
+Session killed? Terminal closed? Computer died? CogniLayer auto-recovers from the change log. Next session picks up where you left off — in either agent.
 
-### Never lose progress to a crash
-Session killed? Terminal closed? Computer crashed? CogniLayer automatically builds an emergency recovery bridge from the change log. The next session picks up where you left off.
+### Cross-project intelligence
+Solved a CORS issue in project A three weeks ago? Search that knowledge from project B. Your experience compounds across all your projects.
 
-### Ship faster
-When your AI already knows your project's architecture, patterns, past decisions, and deployment setup — you skip the warmup and go straight to building.
+### Deployment safety
+Managing multiple servers? The Identity Card system blocks you from deploying to the wrong one. `verify_identity("deploy")` before every push to prod.
 
 ---
 
@@ -43,20 +40,19 @@ When your AI already knows your project's architecture, patterns, past decisions
 
 | Feature | What it means for you |
 |---------|----------------------|
-| **Persistent Memory** | Claude remembers facts, decisions, patterns, and gotchas across sessions |
+| **Shared Agent Memory** | Claude Code and Codex CLI read from the same brain — switch agents without losing context |
+| **Crash Recovery** | Session dies? Next one auto-recovers from the change log — in either agent |
+| **Cross-Project Search** | Working on app B? Search what you learned in app A |
+| **14 Structured Fact Types** | Not dumb notes — error fixes, API contracts, gotchas, procedures, decisions... |
 | **Session Bridges** | Each session starts with a summary of what happened last time |
-| **14 Fact Types** | Not dumb notes — structured knowledge (error fixes, API contracts, procedures...) |
-| **Crash Recovery** | Session dies? Next one auto-recovers from the change log |
 | **Staleness Detection** | Changed a file? CogniLayer warns when a remembered fact might be outdated |
 | **Hybrid Search** | Fulltext + AI vector search finds the right fact every time |
 | **Heat Decay** | Hot facts surface first, cold facts fade — like real memory |
-| **Cross-Project** | Working on app B? Search what you learned in app A |
-| **Doc Indexing** | Your PRDs, READMEs, and configs chunked into searchable pieces |
 | **Deployment Safety** | Identity Card system blocks you from deploying to the wrong server |
 | **Knowledge Linking** | Zettelkasten-style connections between facts, cause/effect chains |
 | **Contradiction Detection** | Finds conflicting facts before they cause bugs |
 | **TUI Dashboard** | Visual memory browser with 7 tabs — see everything at a glance |
-| **Codex CLI Support** | Works with both Claude Code and OpenAI Codex CLI |
+| **Doc Indexing** | Your PRDs, READMEs, and configs chunked into searchable pieces |
 
 ---
 
