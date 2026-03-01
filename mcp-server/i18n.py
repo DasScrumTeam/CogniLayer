@@ -333,6 +333,67 @@ _EN: dict[str, str] = {
     "dna.not_generated": "[DNA not yet generated]",
 
     # ======================================================================
+    # memory_chain.py
+    # ======================================================================
+    "tool.memory_chain.desc": (
+        "Create a causal chain link between two facts. "
+        "Tracks cause->effect relationships (caused, led_to, blocked, fixed, broke)."
+    ),
+    "tool.memory_chain.param.cause_id": "UUID of the cause fact.",
+    "tool.memory_chain.param.effect_id": "UUID of the effect fact.",
+    "tool.memory_chain.param.relationship": (
+        "Relationship type: caused|led_to|blocked|fixed|broke (default: caused)"
+    ),
+    "memory_chain.self_chain": "Cannot create a causal chain from a fact to itself.",
+    "memory_chain.invalid_relationship": (
+        "Invalid relationship '{relationship}'. Valid: {valid}"
+    ),
+    "memory_chain.not_found": "Fact not found: {id}",
+    "memory_chain.cross_project": (
+        "Cannot link facts across projects: {cause_project} != {effect_project}"
+    ),
+    "memory_chain.already_exists": (
+        "Causal chain already exists: '{cause}' -> '{effect}'"
+    ),
+    "memory_chain.created": (
+        "Causal chain created: '{cause}' --[{relationship}]--> '{effect}'"
+    ),
+
+    # ======================================================================
+    # memory_search.py — causal chain display
+    # ======================================================================
+    "memory_search.chain_caused": "{relationship}: [{id}] {preview}",
+    "memory_search.chain_caused_by": "{relationship} by: [{id}] {preview}",
+
+    # ======================================================================
+    # project_context.py — episodes + organization
+    # ======================================================================
+    "project_context.episodes_header": "## Recent Episodes",
+    "project_context.episodes_item": "- [{outcome}] \"{title}\" ({date})",
+    "project_context.org_header": "## Memory Organization",
+    "project_context.org_stats": (
+        "- Clusters: {clusters} | Active: {active} | Reference: {reference} | Archive: {archive}"
+    ),
+    "project_context.org_contradictions": "- Contradictions: {count} unresolved",
+
+    # ======================================================================
+    # consolidate.py
+    # ======================================================================
+    "consolidate.no_project": "No active project. Specify project name or run in a project directory.",
+    "consolidate.report": (
+        "## Consolidation Report for {project}\n"
+        "- Clusters found: {clusters} ({labeled} labeled)\n"
+        "- Tiers: Active={active} | Reference={reference} | Archive={archive}\n"
+        "- New contradictions detected: {contradictions}"
+    ),
+    "consolidate.stale_contradiction": (
+        "Same file '{file}' has multiple {type} facts with different mtimes (one may be stale)"
+    ),
+    "consolidate.age_contradiction": (
+        "Same domain '{domain}' has {type} facts >30 days apart (may be outdated)"
+    ),
+
+    # ======================================================================
     # hooks/on_session_end.py
     # ======================================================================
     "session_end.emergency_header": "[Emergency bridge — running bridge was not updated]",
@@ -644,6 +705,67 @@ _CS: dict[str, str] = {
     "dna.new_session": "[nova session]",
     "dna.first_session": "[prvni session]",
     "dna.not_generated": "[DNA jeste nebyla vygenerovana]",
+
+    # ======================================================================
+    # memory_chain.py
+    # ======================================================================
+    "tool.memory_chain.desc": (
+        "Vytvor kauzalni retez mezi dvema fakty. "
+        "Sleduje pricina->dusledek vztahy (caused, led_to, blocked, fixed, broke)."
+    ),
+    "tool.memory_chain.param.cause_id": "UUID faktu priciny.",
+    "tool.memory_chain.param.effect_id": "UUID faktu dusledku.",
+    "tool.memory_chain.param.relationship": (
+        "Typ vztahu: caused|led_to|blocked|fixed|broke (default: caused)"
+    ),
+    "memory_chain.self_chain": "Nelze vytvorit kauzalni retez z faktu na sebe sama.",
+    "memory_chain.invalid_relationship": (
+        "Neplatny typ vztahu '{relationship}'. Platne: {valid}"
+    ),
+    "memory_chain.not_found": "Fakt nenalezen: {id}",
+    "memory_chain.cross_project": (
+        "Nelze propojit fakty napric projekty: {cause_project} != {effect_project}"
+    ),
+    "memory_chain.already_exists": (
+        "Kauzalni retez uz existuje: '{cause}' -> '{effect}'"
+    ),
+    "memory_chain.created": (
+        "Kauzalni retez vytvoren: '{cause}' --[{relationship}]--> '{effect}'"
+    ),
+
+    # ======================================================================
+    # memory_search.py — causal chain display
+    # ======================================================================
+    "memory_search.chain_caused": "{relationship}: [{id}] {preview}",
+    "memory_search.chain_caused_by": "{relationship} by: [{id}] {preview}",
+
+    # ======================================================================
+    # project_context.py — episodes + organization
+    # ======================================================================
+    "project_context.episodes_header": "## Posledni epizody",
+    "project_context.episodes_item": "- [{outcome}] \"{title}\" ({date})",
+    "project_context.org_header": "## Organizace pameti",
+    "project_context.org_stats": (
+        "- Clustery: {clusters} | Aktivni: {active} | Reference: {reference} | Archiv: {archive}"
+    ),
+    "project_context.org_contradictions": "- Kontradikce: {count} nevyresenych",
+
+    # ======================================================================
+    # consolidate.py
+    # ======================================================================
+    "consolidate.no_project": "Zadny aktivni projekt. Zadej nazev projektu nebo spust v adresari projektu.",
+    "consolidate.report": (
+        "## Konsolidacni report pro {project}\n"
+        "- Nalezenych clusteru: {clusters} ({labeled} oznacenych)\n"
+        "- Tiery: Aktivni={active} | Reference={reference} | Archiv={archive}\n"
+        "- Novych kontradikci: {contradictions}"
+    ),
+    "consolidate.stale_contradiction": (
+        "Stejny soubor '{file}' ma vice {type} faktu s ruznymi mtime (jeden muze byt stale)"
+    ),
+    "consolidate.age_contradiction": (
+        "Stejna domena '{domain}' ma {type} fakty >30 dni od sebe (mohou byt zastarale)"
+    ),
 
     # ======================================================================
     # hooks/on_session_end.py

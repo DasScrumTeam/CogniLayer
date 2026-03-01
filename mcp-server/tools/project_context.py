@@ -103,6 +103,40 @@ def project_context() -> str:
             knowledge_gaps = [(r[0], r[1], r[2]) for r in gap_rows]
         except Exception:
             pass  # knowledge_gaps table might not exist yet
+
+        # V3 Tier 2: Recent Episodes
+        episodes = []
+        try:
+            ep_rows = db.execute("""
+                SELECT episode_title, outcome, start_time FROM sessions
+                WHERE project = ? AND episode_title IS NOT NULL
+                ORDER BY start_time DESC LIMIT 5
+            """, (project,)).fetchall()
+            episodes = [(r[0], r[1], r[2]) for r in ep_rows]
+        except Exception:
+            pass  # episode columns might not exist yet
+
+        # V3 Tier 2: Memory Organization
+        cluster_count = 0
+        tier_counts = {"active": 0, "reference": 0, "archive": 0}
+        contradiction_count = 0
+        try:
+            cluster_count = db.execute(
+                "SELECT COUNT(*) FROM fact_clusters WHERE project = ?", (project,)
+            ).fetchone()[0]
+
+            for tier in ("active", "reference", "archive"):
+                tier_counts[tier] = db.execute(
+                    "SELECT COUNT(*) FROM facts WHERE project = ? AND knowledge_tier = ?",
+                    (project, tier)
+                ).fetchone()[0]
+
+            contradiction_count = db.execute(
+                "SELECT COUNT(*) FROM contradictions WHERE project = ? AND resolved = 0",
+                (project,)
+            ).fetchone()[0]
+        except Exception:
+            pass  # Tier 2 tables might not exist yet
     finally:
         db.close()
 
@@ -131,4 +165,27 @@ def project_context() -> str:
     elif facts_count > 0:
         gaps = "\n" + t("project_context.no_gaps")
 
-    return f"{dna}{bridge}\n{stats}\n{health}{gaps}"
+    # Episodes section
+    ep_section = ""
+    if episodes:
+        ep_section = "\n" + t("project_context.episodes_header")
+        for title, outcome, start_time in episodes:
+            ep_section += "\n" + t("project_context.episodes_item",
+                                    outcome=outcome or "unknown",
+                                    title=title,
+                                    date=start_time[:10] if start_time else "?")
+
+    # Organization section
+    org_section = ""
+    if cluster_count > 0 or any(v > 0 for v in tier_counts.values()):
+        org_section = "\n" + t("project_context.org_header")
+        org_section += "\n" + t("project_context.org_stats",
+                                 clusters=cluster_count,
+                                 active=tier_counts["active"],
+                                 reference=tier_counts["reference"],
+                                 archive=tier_counts["archive"])
+        if contradiction_count > 0:
+            org_section += "\n" + t("project_context.org_contradictions",
+                                     count=contradiction_count)
+
+    return f"{dna}{bridge}\n{stats}\n{health}{gaps}{ep_section}{org_section}"

@@ -34,6 +34,20 @@ def memory_delete(ids: list[str]) -> str:
             except Exception:
                 pass  # fact_links table might not exist yet
 
+            # Clean up causal chains
+            try:
+                db.execute("DELETE FROM causal_chains WHERE cause_id = ? OR effect_id = ?",
+                           (fact_id, fact_id))
+            except Exception:
+                pass  # causal_chains table might not exist yet
+
+            # Clean up contradictions
+            try:
+                db.execute("DELETE FROM contradictions WHERE fact_id_a = ? OR fact_id_b = ?",
+                           (fact_id, fact_id))
+            except Exception:
+                pass  # contradictions table might not exist yet
+
             # Delete from facts (triggers auto-delete from facts_fts via trigger)
             result = db.execute("DELETE FROM facts WHERE id = ?", (fact_id,))
             deleted += result.rowcount

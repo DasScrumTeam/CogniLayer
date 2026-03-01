@@ -1,7 +1,7 @@
-"""CogniLayer MCP Server — V3 (FTS5 + vector + linking + gap tracking).
+"""CogniLayer MCP Server — V3 (FTS5 + vector + linking + gap tracking + episodes + causal chains).
 
 Entry point for the MCP server registered in ~/.claude/settings.json.
-Provides 11 tools for Claude Code to interact with CogniLayer memory.
+Provides 12 tools for Claude Code to interact with CogniLayer memory.
 """
 
 import sys
@@ -26,6 +26,7 @@ from tools.verify_identity import verify_identity
 from tools.identity_set import identity_set
 from tools.recommend_tech import recommend_tech
 from tools.memory_link import memory_link
+from tools.memory_chain import memory_chain
 from i18n import t
 
 server = Server("cognilayer")
@@ -259,6 +260,30 @@ async def list_tools() -> list[Tool]:
                 "required": ["source_id", "target_id"]
             }
         ),
+        Tool(
+            name="memory_chain",
+            description=t("tool.memory_chain.desc"),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "cause_id": {
+                        "type": "string",
+                        "description": t("tool.memory_chain.param.cause_id")
+                    },
+                    "effect_id": {
+                        "type": "string",
+                        "description": t("tool.memory_chain.param.effect_id")
+                    },
+                    "relationship": {
+                        "type": "string",
+                        "description": t("tool.memory_chain.param.relationship"),
+                        "default": "caused",
+                        "enum": ["caused", "led_to", "blocked", "fixed", "broke"]
+                    }
+                },
+                "required": ["cause_id", "effect_id"]
+            }
+        ),
     ]
 
 
@@ -320,6 +345,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 source_id=arguments["source_id"],
                 target_id=arguments["target_id"]
             )
+        elif name == "memory_chain":
+            result = memory_chain(
+                cause_id=arguments["cause_id"],
+                effect_id=arguments["effect_id"],
+                relationship=arguments.get("relationship", "caused")
+            )
         else:
             result = t("server.unknown_tool", name=name)
     except Exception as e:
@@ -361,10 +392,10 @@ def test_tools():
 if __name__ == "__main__":
     if "--test" in sys.argv:
         count = test_tools()
-        if count == 11:
+        if count == 12:
             print(f"\nOK: All {count} tools registered.")
         else:
-            print(f"\nERROR: Expected 11 tools, got {count}.")
+            print(f"\nERROR: Expected 12 tools, got {count}.")
             sys.exit(1)
     else:
         import asyncio

@@ -166,6 +166,47 @@ def _get_linked_facts(db, results: list) -> dict:
     return linked_map
 
 
+def _get_causal_chains(db, results: list) -> dict:
+    """Get causal chains for each result. Returns {fact_id: [chain_dicts]}."""
+    chain_map = {}
+    for r in results:
+        try:
+            # Chains where this fact is cause
+            caused = db.execute("""
+                SELECT f.id, f.content, cc.relationship, 'cause' as direction
+                FROM causal_chains cc
+                JOIN facts f ON cc.effect_id = f.id
+                WHERE cc.cause_id = ?
+                ORDER BY cc.created DESC LIMIT 2
+            """, (r["id"],)).fetchall()
+
+            # Chains where this fact is effect
+            caused_by = db.execute("""
+                SELECT f.id, f.content, cc.relationship, 'effect' as direction
+                FROM causal_chains cc
+                JOIN facts f ON cc.cause_id = f.id
+                WHERE cc.effect_id = ?
+                ORDER BY cc.created DESC LIMIT 2
+            """, (r["id"],)).fetchall()
+
+            chains = []
+            for row in caused:
+                chains.append({
+                    "id": row[0], "content": row[1],
+                    "relationship": row[2], "direction": "cause"
+                })
+            for row in caused_by:
+                chains.append({
+                    "id": row[0], "content": row[1],
+                    "relationship": row[2], "direction": "effect"
+                })
+            if chains:
+                chain_map[r["id"]] = chains[:2]
+        except Exception:
+            pass  # causal_chains table might not exist yet
+    return chain_map
+
+
 def memory_search(query: str, scope: str = "project",
                   type: str = None, limit: int = 5) -> str:
     """Search CogniLayer memory using hybrid FTS5 + vector search."""
@@ -213,8 +254,9 @@ def memory_search(query: str, scope: str = "project",
         except Exception:
             pass
 
-        # Fetch linked facts for display
+        # Fetch linked facts and causal chains for display
         linked_map = _get_linked_facts(db, results)
+        chain_map = _get_causal_chains(db, results)
     finally:
         db.close()
 
@@ -251,6 +293,18 @@ def memory_search(query: str, scope: str = "project",
             for link in linked_map[r["id"]][:3]:
                 line += f"\n   \u2194 " + t("memory_search.linked_fact",
                     id=link["id"][:8], preview=link["content"][:60])
+
+        # Show causal chains
+        if r["id"] in chain_map:
+            for chain in chain_map[r["id"]][:2]:
+                if chain["direction"] == "cause":
+                    line += f"\n   \u2192 " + t("memory_search.chain_caused",
+                        relationship=chain["relationship"],
+                        id=chain["id"][:8], preview=chain["content"][:60])
+                else:
+                    line += f"\n   \u2190 " + t("memory_search.chain_caused_by",
+                        relationship=chain["relationship"],
+                        id=chain["id"][:8], preview=chain["content"][:60])
 
         lines.append(line)
 

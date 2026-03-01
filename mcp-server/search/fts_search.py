@@ -50,6 +50,13 @@ def _fact_row_to_dict(row) -> dict:
     except (IndexError, KeyError):
         d["retrieval_count"] = 0
         d["last_retrieved"] = None
+    # V3 Tier 2 columns
+    try:
+        d["knowledge_tier"] = row["knowledge_tier"] or "active"
+        d["cluster_id"] = row["cluster_id"]
+    except (IndexError, KeyError):
+        d["knowledge_tier"] = "active"
+        d["cluster_id"] = None
     return d
 
 
@@ -164,7 +171,7 @@ def _hybrid_rank(fts_results: list[dict], vec_distances: dict[int, float],
 
 # --- Facts search ---
 
-_FACTS_COLUMNS = "id, project, content, type, domain, tags, timestamp, heat_score, source_file, source_mtime, session_id, rowid, retrieval_count, last_retrieved"
+_FACTS_COLUMNS = "id, project, content, type, domain, tags, timestamp, heat_score, source_file, source_mtime, session_id, rowid, retrieval_count, last_retrieved, knowledge_tier, cluster_id"
 
 
 def fts_search_facts(db: sqlite3.Connection, query: str, project: str = None,

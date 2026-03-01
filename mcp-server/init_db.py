@@ -46,6 +46,10 @@ CREATE TABLE IF NOT EXISTS facts (
     source_file TEXT,
     source_mtime REAL,
     embedding BLOB,
+    retrieval_count INTEGER DEFAULT 0,
+    last_retrieved TEXT,
+    knowledge_tier TEXT DEFAULT 'active',
+    cluster_id INTEGER,
     FOREIGN KEY (project) REFERENCES projects(name)
 );
 
@@ -84,6 +88,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     bridge_content TEXT,
     facts_count INTEGER DEFAULT 0,
     changes_count INTEGER DEFAULT 0,
+    episode_title TEXT,
+    episode_tags TEXT,
+    outcome TEXT,
     FOREIGN KEY (project) REFERENCES projects(name)
 );
 
@@ -200,6 +207,47 @@ CREATE TABLE IF NOT EXISTS knowledge_gaps (
     FOREIGN KEY (project) REFERENCES projects(name)
 );
 
+-- Fact clusters (consolidation output)
+CREATE TABLE IF NOT EXISTS fact_clusters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project TEXT NOT NULL,
+    label TEXT,
+    summary TEXT,
+    fact_count INTEGER DEFAULT 0,
+    created TEXT NOT NULL,
+    updated TEXT NOT NULL,
+    FOREIGN KEY (project) REFERENCES projects(name)
+);
+
+-- Contradictions detected during consolidation
+CREATE TABLE IF NOT EXISTS contradictions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project TEXT NOT NULL,
+    fact_id_a TEXT NOT NULL,
+    fact_id_b TEXT NOT NULL,
+    reason TEXT,
+    detected TEXT NOT NULL,
+    resolved INTEGER DEFAULT 0,
+    FOREIGN KEY (project) REFERENCES projects(name),
+    FOREIGN KEY (fact_id_a) REFERENCES facts(id) ON DELETE CASCADE,
+    FOREIGN KEY (fact_id_b) REFERENCES facts(id) ON DELETE CASCADE
+);
+
+-- Causal chains (cause -> effect relationships)
+CREATE TABLE IF NOT EXISTS causal_chains (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project TEXT NOT NULL,
+    cause_id TEXT NOT NULL,
+    effect_id TEXT NOT NULL,
+    relationship TEXT DEFAULT 'caused',
+    confidence REAL DEFAULT 1.0,
+    created TEXT NOT NULL,
+    session_id TEXT,
+    FOREIGN KEY (project) REFERENCES projects(name),
+    FOREIGN KEY (cause_id) REFERENCES facts(id) ON DELETE CASCADE,
+    FOREIGN KEY (effect_id) REFERENCES facts(id) ON DELETE CASCADE
+);
+
 -- Indexes for fast queries
 CREATE INDEX IF NOT EXISTS idx_facts_project ON facts(project);
 CREATE INDEX IF NOT EXISTS idx_facts_type ON facts(project, type);
@@ -289,9 +337,22 @@ def upgrade_schema(db):
     for col, typedef in [
         ("retrieval_count", "INTEGER DEFAULT 0"),
         ("last_retrieved", "TEXT"),
+        ("knowledge_tier", "TEXT DEFAULT 'active'"),
+        ("cluster_id", "INTEGER"),
     ]:
         try:
             db.execute(f"ALTER TABLE facts ADD COLUMN {col} {typedef}")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+    # New columns on sessions table (episode metadata)
+    for col, typedef in [
+        ("episode_title", "TEXT"),
+        ("episode_tags", "TEXT"),
+        ("outcome", "TEXT"),
+    ]:
+        try:
+            db.execute(f"ALTER TABLE sessions ADD COLUMN {col} {typedef}")
         except sqlite3.OperationalError:
             pass  # Column already exists
 
@@ -320,10 +381,53 @@ def upgrade_schema(db):
             resolved INTEGER DEFAULT 0,
             FOREIGN KEY (project) REFERENCES projects(name)
         );
+        CREATE TABLE IF NOT EXISTS fact_clusters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project TEXT NOT NULL,
+            label TEXT,
+            summary TEXT,
+            fact_count INTEGER DEFAULT 0,
+            created TEXT NOT NULL,
+            updated TEXT NOT NULL,
+            FOREIGN KEY (project) REFERENCES projects(name)
+        );
+        CREATE TABLE IF NOT EXISTS contradictions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project TEXT NOT NULL,
+            fact_id_a TEXT NOT NULL,
+            fact_id_b TEXT NOT NULL,
+            reason TEXT,
+            detected TEXT NOT NULL,
+            resolved INTEGER DEFAULT 0,
+            FOREIGN KEY (project) REFERENCES projects(name),
+            FOREIGN KEY (fact_id_a) REFERENCES facts(id) ON DELETE CASCADE,
+            FOREIGN KEY (fact_id_b) REFERENCES facts(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS causal_chains (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project TEXT NOT NULL,
+            cause_id TEXT NOT NULL,
+            effect_id TEXT NOT NULL,
+            relationship TEXT DEFAULT 'caused',
+            confidence REAL DEFAULT 1.0,
+            created TEXT NOT NULL,
+            session_id TEXT,
+            FOREIGN KEY (project) REFERENCES projects(name),
+            FOREIGN KEY (cause_id) REFERENCES facts(id) ON DELETE CASCADE,
+            FOREIGN KEY (effect_id) REFERENCES facts(id) ON DELETE CASCADE
+        );
         CREATE INDEX IF NOT EXISTS idx_fact_links_source ON fact_links(source_id);
         CREATE INDEX IF NOT EXISTS idx_fact_links_target ON fact_links(target_id);
         CREATE INDEX IF NOT EXISTS idx_gaps_project ON knowledge_gaps(project);
         CREATE INDEX IF NOT EXISTS idx_gaps_resolved ON knowledge_gaps(resolved);
+        CREATE INDEX IF NOT EXISTS idx_clusters_project ON fact_clusters(project);
+        CREATE INDEX IF NOT EXISTS idx_contradictions_project ON contradictions(project);
+        CREATE INDEX IF NOT EXISTS idx_contradictions_resolved ON contradictions(resolved);
+        CREATE INDEX IF NOT EXISTS idx_causal_cause ON causal_chains(cause_id);
+        CREATE INDEX IF NOT EXISTS idx_causal_effect ON causal_chains(effect_id);
+        CREATE INDEX IF NOT EXISTS idx_causal_project ON causal_chains(project);
+        CREATE INDEX IF NOT EXISTS idx_facts_tier ON facts(knowledge_tier);
+        CREATE INDEX IF NOT EXISTS idx_facts_cluster ON facts(cluster_id);
     """)
     db.commit()
 

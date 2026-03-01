@@ -123,10 +123,10 @@ def test_server():
     sys.path.insert(0, str(COGNILAYER_HOME / "mcp-server"))
     from server import test_tools
     count = test_tools()
-    if count == 11:
+    if count == 12:
         print(f"\n[ok] All {count} tools registered successfully.")
     else:
-        print(f"\n[ERROR] Expected 11 tools, got {count}.")
+        print(f"\n[ERROR] Expected 12 tools, got {count}.")
         sys.exit(1)
 
 
