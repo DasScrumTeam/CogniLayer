@@ -1,13 +1,18 @@
 Launch the CogniLayer TUI Dashboard for visual memory management.
 
-Run this command:
+Tell the user to run this command in their terminal:
 ```
-python ~/.cognilayer/tui/app.py
+cognilayer
 ```
 
-If you want a specific project, add `--project <name>`:
+If they want a specific project:
 ```
-python ~/.cognilayer/tui/app.py --project $ARGUMENTS
+cognilayer --project $ARGUMENTS
+```
+
+For demo mode with sample data:
+```
+cognilayer --demo
 ```
 
 The TUI has 7 tabs:
@@ -17,6 +22,6 @@ The TUI has 7 tabs:
 4. **Clusters** — Fact clusters tree view
 5. **Timeline** — Session history with episodes
 6. **Gaps** — Knowledge gaps tracker
-7. **Contradictions** — Contradiction review (press R to resolve)
+7. **Contradictions** — Contradiction review (Enter to resolve)
 
-Keyboard: 1-7 for tabs, Q to quit, R to refresh.
+Keyboard: 1-7 for tabs, Q to quit, F5 to refresh.

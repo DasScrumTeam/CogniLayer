@@ -1,13 +1,18 @@
 Spust CogniLayer TUI Dashboard pro vizualni spravu pameti.
 
-Spust tento prikaz:
+Rekni uzivateli at spusti tento prikaz v terminalu:
 ```
-python ~/.cognilayer/tui/app.py
+cognilayer
 ```
 
-Pro konkretni projekt pridej `--project <nazev>`:
+Pro konkretni projekt:
 ```
-python ~/.cognilayer/tui/app.py --project $ARGUMENTS
+cognilayer --project $ARGUMENTS
+```
+
+Pro demo mod s ukazkovymi daty:
+```
+cognilayer --demo
 ```
 
 TUI ma 7 tabu:
@@ -17,6 +22,6 @@ TUI ma 7 tabu:
 4. **Clustery** — Stromove zobrazeni clusteru faktu
 5. **Timeline** — Historie sessions s epizodami
 6. **Mezery** — Sledovac mezer ve znalostech
-7. **Kontradikce** — Prehled kontradikci (R pro vyreseni)
+7. **Kontradikce** — Prehled kontradikci (Enter pro vyreseni)
 
-Klavesy: 1-7 pro taby, Q pro ukonceni, R pro obnoveni.
+Klavesy: 1-7 pro taby, Q pro ukonceni, F5 pro obnoveni.
