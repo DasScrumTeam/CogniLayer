@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 COGNILAYER_HOME = Path.home() / ".cognilayer"
+CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
 CLAUDE_COMMANDS = Path.home() / ".claude" / "commands"
 REPO_DIR = Path(__file__).parent
 VERSION = (REPO_DIR / "VERSION").read_text(encoding="utf-8").strip()
@@ -235,6 +236,27 @@ def test_server():
         print(f"\n[ERROR] Expected 13 tools, got {count}.")
         sys.exit(1)
 
+    # Verify settings.json registration
+    if CLAUDE_SETTINGS.exists():
+        import json
+        settings = json.loads(CLAUDE_SETTINGS.read_text(encoding="utf-8"))
+        mcp = settings.get("mcpServers", {}).get("cognilayer", {})
+        registered_python = mcp.get("command", "")
+        registered_server = (mcp.get("args") or [""])[0]
+        if registered_python and registered_server:
+            print(f"[ok] MCP server registered in settings.json")
+            print(f"     command: {registered_python}")
+            print(f"     server:  {registered_server}")
+            # Verify the Python executable actually exists
+            if not Path(registered_python.replace("/", os.sep)).exists():
+                print(f"\n[WARNING] Python executable not found: {registered_python}")
+                print(f"          MCP server will fail to start!")
+                print(f"          Fix: re-run install.py with the correct Python")
+        else:
+            print("[WARNING] MCP server NOT found in settings.json — registration may have failed")
+    else:
+        print("[WARNING] ~/.claude/settings.json not found — Claude Code may not be installed")
+
 
 def main():
     codex_mode = "--codex" in sys.argv
@@ -272,32 +294,27 @@ def main():
     else:
         register_mcp(codex=codex_mode)
 
+    # Run verification
+    print("\nRunning verification...")
+    test_server()
+
+    # Show diagnostic summary
+    python_cmd = sys.executable.replace("\\", "/")
     print("\n" + "=" * 50)
     print(f"  CogniLayer v{VERSION} — Installation complete!")
     print("=" * 50)
     print()
-    print("Next steps:")
-    print("  1. Edit ~/.cognilayer/config.yaml")
-    print("     Set projects.base_path to your projects directory")
+    print(f"  Python:     {python_cmd}")
+    print(f"  Home:       {str(COGNILAYER_HOME).replace(chr(92), '/')}")
+    print(f"  Settings:   {str(CLAUDE_SETTINGS).replace(chr(92), '/')}" if not codex_mode else "")
     print()
-    if codex_mode:
-        print("  2. Start Codex CLI in any project:")
-        print("     cd ~/projects/my-app && codex")
-    else:
-        print("  2. Start Claude Code in any project:")
-        print("     cd ~/projects/my-app && claude")
-    print()
+    print("  Next steps:")
+    print("  1. Restart Claude Code (required for MCP server to connect)")
+    print("  2. Edit ~/.cognilayer/config.yaml — set projects.base_path")
     print("  3. Run /onboard to build initial memory")
+    print("  4. Run /cognihelp to see all commands")
+    print("  5. Run 'cognilayer' in terminal for TUI dashboard")
     print()
-    print("  4. Run /status to verify everything works")
-    print()
-    print("  5. Launch TUI dashboard (requires textual):")
-    print("     cognilayer")
-    print()
-
-    # Optional: run test
-    print("Running verification test...")
-    test_server()
 
 
 if __name__ == "__main__":
