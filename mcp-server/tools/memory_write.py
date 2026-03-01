@@ -1,5 +1,6 @@
 """memory_write — Store facts into CogniLayer memory with vector embeddings."""
 
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -66,8 +67,8 @@ def _auto_link_fact(db, fact_id: str, rowid: int, embedding: bytes, project: str
                 INSERT OR IGNORE INTO fact_links (source_id, target_id, score, link_type, created)
                 VALUES (?, ?, ?, 'auto', ?)
             """, (target_id, fact_id, score, now))
-    except Exception:
-        pass  # Linking is best-effort
+    except Exception as e:
+        print(f"[CogniLayer] auto-link failed: {e}", file=sys.stderr)
 
 
 def _resolve_gaps(db, project: str, content: str):
@@ -79,10 +80,10 @@ def _resolve_gaps(db, project: str, content: str):
             WHERE kg.project = ? AND kg.resolved = 0
         """, (project,)).fetchall()
         for gap in gaps:
-            # Simple containment check — if gap query words appear in content
+            # Word boundary check — gap query words must appear as whole words in content
             query_words = gap[1].lower().split()
-            content_lower = content.lower()
-            if all(w in content_lower for w in query_words):
+            content_words = set(re.findall(r'\b\w+\b', content.lower()))
+            if all(w in content_words for w in query_words):
                 db.execute("UPDATE knowledge_gaps SET resolved = 1 WHERE id = ?", (gap[0],))
     except Exception:
         pass  # Gap resolution is best-effort

@@ -292,7 +292,7 @@ def upgrade_schema(db):
     ]:
         try:
             db.execute(f"ALTER TABLE facts ADD COLUMN {col} {typedef}")
-        except Exception:
+        except sqlite3.OperationalError:
             pass  # Column already exists
 
     # New tables (CREATE IF NOT EXISTS is idempotent)

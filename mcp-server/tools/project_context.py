@@ -47,7 +47,7 @@ def project_context() -> str:
         ).fetchone()[0]
 
         hot_count = db.execute(
-            "SELECT COUNT(*) FROM facts WHERE project = ? AND heat_score > 0.8",
+            "SELECT COUNT(*) FROM facts WHERE project = ? AND heat_score >= 0.8",
             (project,)
         ).fetchone()[0]
 
@@ -119,7 +119,7 @@ def project_context() -> str:
         health += "\n" + t("project_context.most_retrieved",
                            content=most_retrieved[0], count=most_retrieved[1])
     health += "\n" + t("project_context.never_retrieved", count=never_retrieved)
-    health += f"\n- Avg retrievals/fact: {avg_retrievals:.1f}"
+    health += "\n" + t("project_context.avg_retrievals", avg=avg_retrievals)
 
     # Knowledge Gaps section
     gaps = ""

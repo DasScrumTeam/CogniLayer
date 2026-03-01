@@ -25,6 +25,7 @@ def open_db(with_vec: bool = False) -> sqlite3.Connection:
     db.execute("PRAGMA synchronous=NORMAL")
     db.execute("PRAGMA busy_timeout=5000")
     db.execute("PRAGMA wal_autocheckpoint=1000")
+    db.execute("PRAGMA foreign_keys=ON")
     db.row_factory = sqlite3.Row
     if with_vec:
         _load_sqlite_vec(db)

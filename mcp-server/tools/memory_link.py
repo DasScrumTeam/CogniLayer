@@ -11,6 +11,9 @@ from i18n import t
 
 def memory_link(source_id: str, target_id: str) -> str:
     """Create a manual bidirectional link between two facts."""
+    if source_id == target_id:
+        return t("memory_link.self_link")
+
     db = open_db()
     try:
         # Validate both facts exist
@@ -33,7 +36,7 @@ def memory_link(source_id: str, target_id: str) -> str:
         # Insert bidirectional links
         now = datetime.now().isoformat()
         db.execute("""
-            INSERT INTO fact_links (source_id, target_id, score, link_type, created)
+            INSERT OR IGNORE INTO fact_links (source_id, target_id, score, link_type, created)
             VALUES (?, ?, 1.0, 'manual', ?)
         """, (source_id, target_id, now))
         db.execute("""

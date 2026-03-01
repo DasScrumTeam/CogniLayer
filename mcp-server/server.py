@@ -329,6 +329,16 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
 
 async def main():
+    # Auto-migrate schema on startup (idempotent, safe for existing DBs)
+    try:
+        from db import open_db
+        from init_db import upgrade_schema
+        db = open_db()
+        upgrade_schema(db)
+        db.close()
+    except Exception:
+        pass  # Migration failure should not prevent server start
+
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, server.create_initialization_options())
 

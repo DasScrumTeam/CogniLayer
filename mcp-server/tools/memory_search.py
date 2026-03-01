@@ -14,13 +14,16 @@ from i18n import t
 def _check_staleness(fact: dict, project_path: str) -> str | None:
     if not fact.get("source_file") or not project_path:
         return None
-    file_path = Path(project_path) / fact["source_file"]
-    if not file_path.exists():
-        return "DELETED"
-    if fact.get("source_mtime"):
-        current_mtime = file_path.stat().st_mtime
-        if current_mtime > fact["source_mtime"]:
-            return "STALE"
+    try:
+        file_path = Path(project_path) / fact["source_file"]
+        if not file_path.exists():
+            return "DELETED"
+        if fact.get("source_mtime"):
+            current_mtime = file_path.stat().st_mtime
+            if current_mtime > fact["source_mtime"]:
+                return "STALE"
+    except (PermissionError, OSError):
+        return None
     return None
 
 
@@ -33,7 +36,7 @@ def _heat_label(score: float) -> str:
     return "cold"
 
 
-_last_decay_time = None
+_last_decay_times = {}  # per-project throttle: {project_name: datetime}
 
 # Type-based half-lives in days — longer = decays slower
 DECAY_HALF_LIVES = {
@@ -61,11 +64,11 @@ def _apply_heat_decay(db, project: str):
     Each fact type has a different half-life — decisions persist longer, tasks fade faster.
     Throttled to run at most once per hour.
     """
-    global _last_decay_time
     now = datetime.now()
-    if _last_decay_time and (now - _last_decay_time).total_seconds() < 3600:
+    last = _last_decay_times.get(project)
+    if last and (now - last).total_seconds() < 3600:
         return
-    _last_decay_time = now
+    _last_decay_times[project] = now
 
     rows = db.execute("""
         SELECT id, type, heat_score, last_accessed, timestamp
@@ -84,7 +87,7 @@ def _apply_heat_decay(db, project: str):
         except (ValueError, TypeError):
             continue
 
-        age_days = (now - access_time).total_seconds() / 86400
+        age_days = max(0, (now - access_time).total_seconds() / 86400)
         if age_days < 1:
             continue  # No decay for facts accessed within last day
 
@@ -109,7 +112,7 @@ def _log_knowledge_gap(db, query: str, project: str, search_type: str, results: 
     """Log query as knowledge gap if no/weak results. Auto-resolve if good results."""
     if not project:
         return
-    normalized = _normalize_query(query)
+    normalized = _normalize_query(query)[:500]
     now = datetime.now().isoformat()
 
     best_score = max((r.get("_hybrid_score", r.get("heat_score", 0)) for r in results), default=0) if results else 0
@@ -148,11 +151,13 @@ def _get_linked_facts(db, results: list) -> dict:
     for r in results:
         try:
             rows = db.execute("""
-                SELECT f.id, f.content FROM fact_links fl
+                SELECT DISTINCT f.id, f.content, MAX(fl.score) as best_score
+                FROM fact_links fl
                 JOIN facts f ON (fl.target_id = f.id AND fl.source_id = ?)
                             OR (fl.source_id = f.id AND fl.target_id = ?)
                 WHERE f.id != ?
-                ORDER BY fl.score DESC LIMIT 3
+                GROUP BY f.id
+                ORDER BY best_score DESC LIMIT 3
             """, (r["id"], r["id"], r["id"])).fetchall()
             if rows:
                 linked_map[r["id"]] = [{"id": row[0], "content": row[1]} for row in rows]
@@ -184,17 +189,29 @@ def memory_search(query: str, scope: str = "project",
         # Boost accessed facts' heat + track retrieval
         now_str = datetime.now().isoformat()
         for r in results:
-            db.execute("""
-                UPDATE facts SET heat_score = MIN(1.0, heat_score + 0.2),
-                                 last_accessed = ?,
-                                 retrieval_count = COALESCE(retrieval_count, 0) + 1,
-                                 last_retrieved = ?
-                WHERE id = ?
-            """, (now_str, now_str, r["id"]))
+            try:
+                db.execute("""
+                    UPDATE facts SET heat_score = MIN(1.0, heat_score + 0.2),
+                                     last_accessed = ?,
+                                     retrieval_count = COALESCE(retrieval_count, 0) + 1,
+                                     last_retrieved = ?
+                    WHERE id = ?
+                """, (now_str, now_str, r["id"]))
+            except Exception:
+                # Pre-migration DB: fall back to heat-only update
+                db.execute("""
+                    UPDATE facts SET heat_score = MIN(1.0, heat_score + 0.2),
+                                     last_accessed = ?
+                    WHERE id = ?
+                """, (now_str, r["id"]))
+                break  # All rows lack V3 columns, no need to retry each
         db.commit()
 
-        # Knowledge gap tracking
-        _log_knowledge_gap(db, query, project, type, results)
+        # Knowledge gap tracking (table may not exist on pre-migration DB)
+        try:
+            _log_knowledge_gap(db, query, project, type, results)
+        except Exception:
+            pass
 
         # Fetch linked facts for display
         linked_map = _get_linked_facts(db, results)

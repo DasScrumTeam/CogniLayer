@@ -141,6 +141,7 @@ _EN: dict[str, str] = {
     "memory_link.not_found": "Fact not found: {id}",
     "memory_link.already_linked": "Already linked: '{source}' <-> '{target}'",
     "memory_link.linked": "Linked: '{source}' <-> '{target}'",
+    "memory_link.self_link": "Cannot link a fact to itself.",
 
     # ======================================================================
     # file_search.py
@@ -170,6 +171,7 @@ _EN: dict[str, str] = {
     "project_context.gaps_header": "## Knowledge Gaps (unresolved)",
     "project_context.gaps_item": "- \"{query}\" (asked {times}x)",
     "project_context.no_gaps": "## Knowledge Gaps\nNo unresolved gaps.",
+    "project_context.avg_retrievals": "- Avg retrievals/fact: {avg:.1f}",
 
     # ======================================================================
     # session_bridge.py
@@ -452,6 +454,7 @@ _CS: dict[str, str] = {
     "memory_link.not_found": "Fakt nenalezen: {id}",
     "memory_link.already_linked": "Uz propojeno: '{source}' <-> '{target}'",
     "memory_link.linked": "Propojeno: '{source}' <-> '{target}'",
+    "memory_link.self_link": "Nelze propojit fakt sam se sebou.",
 
     # ======================================================================
     # file_search.py
@@ -481,6 +484,7 @@ _CS: dict[str, str] = {
     "project_context.gaps_header": "## Mezery ve znalostech (nevyresene)",
     "project_context.gaps_item": "- \"{query}\" (dotazano {times}x)",
     "project_context.no_gaps": "## Mezery ve znalostech\nZadne nevyresene mezery.",
+    "project_context.avg_retrievals": "- Prumer vyhledani/fakt: {avg:.1f}",
 
     # ======================================================================
     # session_bridge.py
