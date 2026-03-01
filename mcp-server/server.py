@@ -4,9 +4,20 @@ Entry point for the MCP server registered in ~/.claude/settings.json or ~/.codex
 Provides 13 tools for Claude Code / Codex CLI to interact with CogniLayer memory.
 """
 
+import logging
 import sys
 import json
 from pathlib import Path
+
+# Setup logging to file (stderr is used by MCP protocol, so we log to file)
+LOG_DIR = Path.home() / ".cognilayer" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+logging.basicConfig(
+    filename=str(LOG_DIR / "cognilayer.log"),
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 # Ensure our package is importable
 sys.path.insert(0, str(Path(__file__).parent))
@@ -372,12 +383,15 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         else:
             result = t("server.unknown_tool", name=name)
     except Exception as e:
+        logging.error("Tool %s failed: %s", name, e, exc_info=True)
         result = t("server.tool_error", name=name, error=str(e))
 
     return [TextContent(type="text", text=result)]
 
 
 async def main():
+    logging.info("CogniLayer MCP server starting (v%s)", get_version())
+
     # Auto-migrate schema on startup (idempotent, safe for existing DBs)
     try:
         from db import open_db
@@ -385,10 +399,13 @@ async def main():
         db = open_db()
         upgrade_schema(db)
         db.close()
-    except Exception:
-        pass  # Migration failure should not prevent server start
+        logging.info("Schema migration OK")
+    except Exception as e:
+        logging.warning("Schema migration failed (non-fatal): %s", e)
 
+    logging.info("Starting stdio transport...")
     async with stdio_server() as (read_stream, write_stream):
+        logging.info("MCP server ready, waiting for requests")
         await server.run(read_stream, write_stream, server.create_initialization_options())
 
 

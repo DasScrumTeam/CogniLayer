@@ -112,6 +112,14 @@ python ~/.cognilayer/mcp-server/server.py --test
 # → "OK: All 13 tools registered."
 ```
 
+### Troubleshooting
+
+MCP server not connecting? Run the diagnostic tool:
+```bash
+python diagnose.py          # Check everything
+python diagnose.py --fix    # Check + auto-fix missing dependencies
+```
+
 ### Requirements
 - Python 3.11+
 - Claude Code and/or Codex CLI

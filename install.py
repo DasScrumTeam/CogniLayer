@@ -193,6 +193,12 @@ def copy_files():
         shutil.copy2(helper_src, COGNILAYER_HOME / "onboard_helper.py")
         print("  [copy] onboard_helper.py")
 
+    # Copy diagnostic tool
+    diag_src = REPO_DIR / "diagnose.py"
+    if diag_src.exists():
+        shutil.copy2(diag_src, COGNILAYER_HOME / "diagnose.py")
+        print("  [copy] diagnose.py")
+
     # Copy VERSION file
     shutil.copy2(REPO_DIR / "VERSION", COGNILAYER_HOME / "VERSION")
     print(f"  [copy] VERSION ({VERSION})")
@@ -240,36 +246,74 @@ def register_mcp(codex: bool = False):
 
 
 def test_server():
-    """Quick test to verify installation."""
-    sys.path.insert(0, str(COGNILAYER_HOME / "mcp-server"))
-    from server import test_tools
-    count = test_tools()
-    if count == 13:
-        print(f"\n[ok] All {count} tools registered successfully.")
-    else:
-        print(f"\n[ERROR] Expected 13 tools, got {count}.")
-        sys.exit(1)
+    """Test the server as a subprocess — exactly as Claude Code would start it.
 
-    # Verify settings.json registration
+    This catches dependency issues that in-process imports would miss
+    (e.g., mcp not installed for the registered Python version).
+    """
+    import json as json_mod
+
+    # Read registration info
+    registered_python = sys.executable.replace("\\", "/")
+    server_path = str(COGNILAYER_HOME / "mcp-server" / "server.py").replace("\\", "/")
+
     if CLAUDE_SETTINGS.exists():
-        import json
-        settings = json.loads(CLAUDE_SETTINGS.read_text(encoding="utf-8"))
-        mcp = settings.get("mcpServers", {}).get("cognilayer", {})
-        registered_python = mcp.get("command", "")
-        registered_server = (mcp.get("args") or [""])[0]
-        if registered_python and registered_server:
+        settings = json_mod.loads(CLAUDE_SETTINGS.read_text(encoding="utf-8"))
+        mcp_cfg = settings.get("mcpServers", {}).get("cognilayer", {})
+        if mcp_cfg:
+            registered_python = mcp_cfg.get("command", registered_python)
+            server_path = (mcp_cfg.get("args") or [server_path])[0]
             print(f"[ok] MCP server registered in settings.json")
             print(f"     command: {registered_python}")
-            print(f"     server:  {registered_server}")
-            # Verify the Python executable actually exists
-            if not Path(registered_python.replace("/", os.sep)).exists():
-                print(f"\n[WARNING] Python executable not found: {registered_python}")
-                print(f"          MCP server will fail to start!")
-                print(f"          Fix: re-run install.py with the correct Python")
+            print(f"     server:  {server_path}")
         else:
             print("[WARNING] MCP server NOT found in settings.json — registration may have failed")
     else:
         print("[WARNING] ~/.claude/settings.json not found — Claude Code may not be installed")
+
+    # Verify Python executable exists
+    python_path = Path(registered_python.replace("/", os.sep))
+    if not python_path.exists():
+        print(f"\n[WARNING] Python executable not found: {registered_python}")
+        print(f"          MCP server will fail to start!")
+        print(f"          Fix: re-run install.py with the correct Python")
+        return
+
+    # Actually run the server --test as subprocess (catches missing deps)
+    print(f"\n  Testing server startup (subprocess)...")
+    try:
+        result = subprocess.run(
+            [registered_python, server_path, "--test"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            # Count tools from output
+            for line in result.stdout.split("\n"):
+                if "Registered tools:" in line:
+                    print(f"  {line.strip()}")
+                if line.startswith("OK:") or line.startswith("\nOK:"):
+                    print(f"\n[ok] {line.strip()}")
+        else:
+            stderr = result.stderr.strip()
+            stdout = result.stdout.strip()
+            error = stderr or stdout
+            print(f"\n[ERROR] Server test failed (exit code {result.returncode}):")
+            # Show error, highlighting missing modules
+            for line in error.split("\n"):
+                if "ModuleNotFoundError" in line or "ImportError" in line:
+                    print(f"  >>> {line}")
+                    # Extract module name and suggest fix
+                    if "No module named" in line and "'" in line:
+                        module = line.split("'")[1]
+                        print(f"\n  Fix: \"{registered_python}\" -m pip install {module}")
+                elif line.strip():
+                    print(f"  {line}")
+    except subprocess.TimeoutExpired:
+        print(f"\n[WARNING] Server test timed out (30s)")
+    except Exception as e:
+        print(f"\n[ERROR] Could not test server: {e}")
 
 
 def main():
@@ -328,6 +372,8 @@ def main():
     print("  3. Run /onboard to build initial memory")
     print("  4. Run /cognihelp to see all commands")
     print("  5. Run 'cognilayer' in terminal for TUI dashboard")
+    print()
+    print("  Trouble? Run: python diagnose.py --fix")
     print()
 
 
