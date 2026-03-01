@@ -1,20 +1,20 @@
 [project]
 name = "cognilayer"
-version = "3.0.0"
-description = "Persistent memory for Claude Code — MCP server + hooks that give Claude long-term memory across sessions"
+version = "3.1.0"
+description = "Persistent memory for Claude Code & Codex CLI — save ~100K tokens/session. 13 MCP tools, hybrid search, TUI dashboard, crash recovery."
 readme = "README.md"
 license = "GPL-3.0-or-later"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = []
-keywords = ["claude", "claude-code", "mcp", "memory", "ai", "llm", "persistent-memory"]
+keywords = ["claude", "claude-code", "codex-cli", "mcp", "memory", "ai", "llm", "persistent-memory", "vibecoding", "tui"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries",
     "Topic :: Software Development :: Quality Assurance",
 ]
