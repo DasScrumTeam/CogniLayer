@@ -414,8 +414,9 @@ _EN: dict[str, str] = {
     # session_init.py (Codex MCP tool)
     # ======================================================================
     "tool.session_init.desc": (
-        "Initialize CogniLayer session. Replaces SessionStart hook for Codex CLI. "
-        "Returns DNA + bridge + crash recovery. Call this at the start of every session."
+        "Initialize CogniLayer session (for Codex CLI ONLY — Claude Code uses hooks instead, "
+        "do NOT call this if you already have CogniLayer context in CLAUDE.md). "
+        "Returns DNA + bridge + crash recovery."
     ),
     "tool.session_init.param.project_path": (
         "Path to the project directory. Auto-detects from CWD if not provided."
@@ -819,8 +820,9 @@ _CS: dict[str, str] = {
     # session_init.py (Codex MCP tool)
     # ======================================================================
     "tool.session_init.desc": (
-        "Inicializuj CogniLayer session. Nahrazuje SessionStart hook pro Codex CLI. "
-        "Vraci DNA + bridge + crash recovery. Zavolej na zacatku kazde session."
+        "Inicializuj CogniLayer session (POUZE pro Codex CLI — Claude Code pouziva hooky, "
+        "NEVOLEJ pokud uz mas CogniLayer kontext v CLAUDE.md). "
+        "Vraci DNA + bridge + crash recovery."
     ),
     "tool.session_init.param.project_path": (
         "Cesta k adresari projektu. Auto-detekce z CWD pokud neni zadano."
