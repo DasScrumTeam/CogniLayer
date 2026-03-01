@@ -1,10 +1,10 @@
 # CogniLayer
 
-**Persistent memory for Claude Code.** CogniLayer gives Claude Code a long-term memory that survives across sessions, projects, and crashes.
+**Persistent memory for Claude Code & Codex CLI.** CogniLayer gives AI coding agents a long-term memory that survives across sessions, projects, and crashes.
 
 **Save ~80-100K tokens per session** — instead of re-reading files and re-discovering architecture from scratch, CogniLayer injects compact context in a few kilobytes.
 
-Built as an [MCP server](https://modelcontextprotocol.io/) + hooks system that integrates directly into Claude Code's workflow.
+Built as an [MCP server](https://modelcontextprotocol.io/) + hooks system that integrates directly into Claude Code and Codex CLI workflows.
 
 ## The Problem
 
@@ -19,31 +19,36 @@ CogniLayer automatically:
 - **Indexes your docs** — chunks PRDs, READMEs, and configs into searchable pieces
 - **Guards deployments** — Identity Card system prevents deploying to the wrong server
 - **Works across projects** — search knowledge from one project while working on another
+- **Links knowledge** — Zettelkasten-style fact linking, causal chains, cluster organization
+- **TUI Dashboard** — Visual memory browser with 7 tabs
 
 ## How It Works
 
 ```
-Claude Code Session
+Claude Code / Codex CLI Session
     │
-    ├── SessionStart hook
-    │   └── Injects Project DNA + last session bridge into CLAUDE.md
+    ├── SessionStart hook (Claude Code) / session_init tool (Codex)
+    │   └── Injects Project DNA + last session bridge
     │
-    ├── MCP Server (10 tools)
-    │   ├── memory_search  — Find facts with staleness detection
-    │   ├── memory_write   — Store facts (14 types, deduplication)
-    │   ├── memory_delete  — Remove outdated facts
-    │   ├── file_search    — Search indexed project docs
-    │   ├── project_context — Get project DNA + stats
-    │   ├── session_bridge — Save/load session continuity
-    │   ├── decision_log   — Query past decisions
+    ├── MCP Server (13 tools)
+    │   ├── memory_search   — Find facts with staleness detection
+    │   ├── memory_write    — Store facts (14 types, deduplication)
+    │   ├── memory_delete   — Remove outdated facts
+    │   ├── memory_link     — Manually link related facts
+    │   ├── memory_chain    — Create causal chains (cause → effect)
+    │   ├── file_search     — Search indexed project docs
+    │   ├── project_context — Get project DNA + health metrics
+    │   ├── session_bridge  — Save/load session continuity
+    │   ├── session_init    — Initialize session (Codex CLI)
+    │   ├── decision_log    — Query past decisions
     │   ├── verify_identity — Safety gate before deploy/SSH/push
-    │   ├── identity_set   — Configure project Identity Card
-    │   └── recommend_tech — Suggest tech stacks from similar projects
+    │   ├── identity_set    — Configure project Identity Card
+    │   └── recommend_tech  — Suggest tech stacks from similar projects
     │
-    ├── PostToolUse hook
+    ├── PostToolUse hook (Claude Code only)
     │   └── Logs every file Write/Edit (<1ms overhead)
     │
-    └── SessionEnd hook
+    └── SessionEnd hook / session_bridge(save)
         └── Closes session, builds emergency bridge if needed
 ```
 
@@ -57,7 +62,15 @@ Not just dumb notes — structured knowledge:
 When you search memory, CogniLayer checks if the source file has changed since the fact was recorded. Changed facts are marked with `STALE` so you know to verify before acting.
 
 ### Session Bridges
-Every session gets a summary — what was done, what's open, key decisions. The next session automatically gets this context injected into CLAUDE.md.
+Every session gets a summary — what was done, what's open, key decisions. The next session automatically gets this context injected.
+
+### Knowledge Organization (V3)
+- **Fact linking** — Bidirectional Zettelkasten-style connections between facts
+- **Causal chains** — Track cause→effect relationships (caused, led_to, blocked, fixed, broke)
+- **Memory consolidation** — Clusters related facts, assigns knowledge tiers (active/reference/archive)
+- **Contradiction detection** — Finds conflicting facts during consolidation
+- **Knowledge gaps** — Tracks weak/failed searches to identify missing knowledge
+- **Retrieval tracking** — Counts how often facts are accessed, surfaces unused knowledge
 
 ### Project Identity Card
 Stores deployment configuration (SSH, ports, domains, PM2 processes) with:
@@ -68,34 +81,46 @@ Stores deployment configuration (SSH, ports, domains, PM2 processes) with:
 ### Crash Recovery
 If a session crashes (kill, timeout, error), the next session detects the orphan and builds an emergency bridge from the change log.
 
-### Hybrid Search (Phase 2)
+### Hybrid Search
 - **FTS5** fulltext search for keyword matching
 - **Vector embeddings** via [fastembed](https://github.com/qdrant/fastembed) (CPU-only, ONNX, no GPU needed)
 - **sqlite-vec** for vector storage directly in SQLite
 - Hybrid ranker combines both scores (40% FTS5 + 60% vector similarity)
-- Finds semantically similar facts even when keywords don't match
 
 ### Heat Decay
 Facts have a "temperature" that changes over time:
 - **Hot** (0.7-1.0) — recently accessed, high relevance
 - **Warm** (0.3-0.7) — moderately recent
 - **Cold** (0.05-0.3) — old, rarely accessed
-- Decay runs automatically on every search
-- Accessed facts get a heat boost (+0.2)
 
-### Zero Configuration
-- No daemon, no server to run
-- SQLite with WAL mode — zero setup, works everywhere
-- Auto-detects project name, framework, tech stack from project files
-- Phase 1 (FTS5 only) works with zero extra dependencies
-- Phase 2 (hybrid search) needs: `pip install fastembed sqlite-vec`
+### TUI Dashboard
+Visual memory browser with 7 tabs:
+1. **Overview** — Stats, health metrics, last session
+2. **Facts** — Searchable fact list with type/domain/tier filters
+3. **Heatmap** — Heat score distribution by type and project
+4. **Clusters** — Fact cluster tree view
+5. **Timeline** — Session history with episodes and outcomes
+6. **Gaps** — Knowledge gap tracker
+7. **Contradictions** — Review and resolve contradictions
+
+```bash
+python ~/.cognilayer/tui/app.py                    # All projects
+python ~/.cognilayer/tui/app.py --project my-app   # Specific project
+```
+
+### Codex CLI Support
+CogniLayer works with OpenAI's Codex CLI in addition to Claude Code:
+- Registers as MCP server in `~/.codex/config.toml`
+- `session_init` tool replaces hooks (Codex has no hook system)
+- `AGENTS.md` generator provides Codex-specific instructions
+- Same memory DB shared between both CLIs
 
 ## Installation
 
 ### Requirements
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
-- Python 3.10+
-- pip packages: `mcp` (required), `fastembed sqlite-vec` (optional, for vector search)
+- Python 3.11+ (for `tomllib`)
+- Claude Code and/or Codex CLI
+- pip packages: `mcp`, `pyyaml` (required), `fastembed`, `sqlite-vec` (optional), `textual` (optional, for TUI)
 
 ### Quick Install
 
@@ -104,34 +129,32 @@ Facts have a "temperature" that changes over time:
 git clone https://github.com/LakyFx/CogniLayer.git
 cd CogniLayer
 
-# Install
+# Install for Claude Code (default)
 python install.py
+
+# Install for Codex CLI
+python install.py --codex
+
+# Install for both
+python install.py --both
 ```
 
 The installer will:
-1. Copy files to `~/.cognilayer/`
-2. Copy slash commands to `~/.claude/commands/`
-3. Initialize the SQLite database
-4. Register MCP server and hooks in `~/.claude/settings.json`
+1. Check Python version and dependencies
+2. Copy files to `~/.cognilayer/`
+3. Copy slash commands to `~/.claude/commands/`
+4. **Backup** existing database before migration
+5. Initialize/upgrade the SQLite database (non-destructive)
+6. Register MCP server and hooks
 
-### Manual Install
+### Optional Dependencies
 
 ```bash
-# Install dependency
-pip install mcp
+# For hybrid vector search (recommended)
+pip install fastembed sqlite-vec
 
-# Copy files
-mkdir -p ~/.cognilayer/mcp-server ~/.cognilayer/hooks ~/.cognilayer/logs
-cp -r mcp-server/* ~/.cognilayer/mcp-server/
-cp -r hooks/* ~/.cognilayer/hooks/
-cp config.yaml ~/.cognilayer/
-cp -r commands/en/* ~/.claude/commands/  # or commands/cs/ for Czech
-
-# Initialize database
-cd ~/.cognilayer/mcp-server && python init_db.py
-
-# Register in Claude Code
-cd ~/.cognilayer/hooks && python register.py
+# For TUI dashboard
+pip install textual
 ```
 
 ### Verify Installation
@@ -139,8 +162,38 @@ cd ~/.cognilayer/hooks && python register.py
 ```bash
 # Test MCP server
 python ~/.cognilayer/mcp-server/server.py --test
-# Should output: "OK: All 10 tools registered."
+# Should output: "OK: All 13 tools registered."
 ```
+
+## Upgrading
+
+### From V3 Tier 2 (12 tools) to V3 Tier 3 (13 tools)
+
+The upgrade is safe and non-destructive:
+
+1. **Stop all Claude Code sessions** (to avoid MCP server conflicts during file replacement)
+2. **Pull the latest code**: `git pull`
+3. **Run the installer**: `python install.py`
+
+What happens:
+- All `.py` files are replaced with the latest versions
+- `config.yaml` is **preserved** (never overwritten)
+- `memory.db` is **backed up** automatically before migration
+- Schema migration is **purely additive** (new columns/tables, no deletions)
+- Existing hooks are de-duplicated and re-registered
+- New files added: `session_init.py`, `register_codex.py`, TUI dashboard
+
+After upgrade:
+- MCP server reports 13 tools instead of 12
+- New `/tui` and `/consolidate` slash commands available
+- CLAUDE.md blocks are updated automatically on next session start
+
+### Rollback
+
+If something goes wrong:
+- Your database backup is at `~/.cognilayer/memory.db.backup-YYYYMMDD-HHMMSS`
+- Copy it back: `cp ~/.cognilayer/memory.db.backup-* ~/.cognilayer/memory.db`
+- Restore old code: `git checkout <previous-commit> && python install.py`
 
 ## Usage
 
@@ -150,11 +203,13 @@ python ~/.cognilayer/mcp-server/server.py --test
 |---------|-------------|
 | `/status` | Show memory stats and project context |
 | `/recall [query]` | Search memory for specific knowledge |
-| `/harvest` | Manually trigger knowledge extraction from current session |
+| `/harvest` | Manually trigger knowledge extraction |
 | `/onboard` | Scan current project and build initial memory |
 | `/onboard-all` | Batch onboard all projects in your workspace |
 | `/forget [query]` | Delete specific facts from memory |
-| `/identity` | Manage Project Identity Card (deploy config, safety) |
+| `/identity` | Manage Project Identity Card |
+| `/consolidate` | Run memory consolidation (clusters, tiers, contradictions) |
+| `/tui [project]` | Launch TUI dashboard |
 
 ### Automatic Behavior
 
@@ -164,52 +219,39 @@ CogniLayer works automatically once installed:
 - **File changes**: Every Write/Edit is logged for crash recovery
 - **Session end**: Closes session, builds emergency bridge if needed
 
-### Example Workflow
-
-```
-# Start working on a project
-cd ~/projects/my-app && claude
-
-# Claude automatically knows:
-# - Project DNA (Next.js 14, Tailwind, SQLite)
-# - What happened last session
-# - Past decisions and their reasons
-# - Known gotchas and patterns
-
-# Search memory explicitly
-/recall authentication flow
-
-# Check project status
-/status
-
-# Before deploying — safety check happens automatically
-# Claude calls verify_identity() and shows you the target server
-```
-
 ## Architecture
 
 ```
 ~/.cognilayer/
-├── memory.db          # SQLite (WAL mode, FTS5, 11 tables)
-├── config.yaml        # Configuration
-├── active_session.json  # Current session state (runtime)
+├── memory.db              # SQLite (WAL mode, FTS5, 17 tables)
+├── config.yaml            # Configuration (never overwritten)
+├── active_session.json    # Current session state (runtime)
 ├── mcp-server/
-│   ├── server.py      # MCP entry point (10 tools)
-│   ├── db.py          # Shared DB helper
-│   ├── init_db.py     # Schema creation
-│   ├── indexer/       # File scanning and chunking
-│   ├── search/        # FTS5 search helpers
-│   └── tools/         # 10 MCP tool implementations
+│   ├── server.py          # MCP entry point (13 tools)
+│   ├── db.py              # Shared DB helper
+│   ├── i18n.py            # Translations (EN + CS)
+│   ├── init_db.py         # Schema creation + migration
+│   ├── register_codex.py  # Codex CLI registration
+│   ├── indexer/           # File scanning and chunking
+│   ├── search/            # FTS5 + vector search helpers
+│   └── tools/             # 13 MCP tool implementations
 ├── hooks/
 │   ├── on_session_start.py
 │   ├── on_session_end.py
 │   ├── on_file_change.py
+│   ├── generate_agents_md.py  # Codex AGENTS.md generator
 │   └── register.py
+├── tui/                   # TUI Dashboard (Textual)
+│   ├── app.py             # Main application
+│   ├── data.py            # Read-only data access layer
+│   ├── styles.tcss        # CSS stylesheet
+│   ├── screens/           # 7 tab screens
+│   └── widgets/           # Reusable widgets
 └── logs/
     └── cognilayer.log
 ```
 
-### Database Schema (11 tables)
+### Database Schema (17 tables)
 
 | Table | Purpose |
 |-------|---------|
@@ -219,11 +261,17 @@ cd ~/projects/my-app && claude
 | `file_chunks` | Indexed project documentation |
 | `chunks_fts` | FTS5 fulltext index on chunks |
 | `decisions` | Append-only decision log |
-| `sessions` | Session records with bridges |
+| `sessions` | Session records with bridges + episodes |
 | `changes` | Automatic file change log |
 | `project_identity` | Identity Card (deploy, safety) |
 | `identity_audit_log` | Safety field change history |
 | `tech_templates` | Reusable tech stack templates |
+| `fact_links` | Zettelkasten bidirectional links |
+| `knowledge_gaps` | Tracked weak/failed searches |
+| `fact_clusters` | Consolidation output clusters |
+| `contradictions` | Detected conflicting facts |
+| `causal_chains` | Cause → effect relationships |
+| `facts_vec` / `chunks_vec` | Vector embeddings (optional) |
 
 ## Configuration
 
@@ -250,34 +298,13 @@ search:
 
 ### Language Support
 
-CogniLayer supports English (`en`) and Czech (`cs`). Set the `language` field in `config.yaml` to switch. This affects:
-- MCP tool descriptions and parameter hints
-- All tool output messages (errors, confirmations, warnings)
-- CLAUDE.md auto-generated instructions
-- Slash command prompts (`/status`, `/recall`, etc.)
+CogniLayer supports English (`en`) and Czech (`cs`). Set the `language` field in `config.yaml` to switch. After changing the language, re-run `python install.py` to update slash commands.
 
-After changing the language, re-run `python install.py` to update slash commands.
+## Known Limitations
 
-## Roadmap
-
-### Phase 1 (Complete)
-- SQLite + FTS5 fulltext search
-- 10 MCP tools, 3 hooks, 7 slash commands
-- Session bridges and crash recovery
-- Identity Card with safety locking
-
-### Phase 2 (Complete)
-- Vector embeddings via [fastembed](https://github.com/qdrant/fastembed) (CPU-only, ONNX)
-- [sqlite-vec](https://github.com/asg017/sqlite-vec) for vector storage
-- Hybrid search (FTS5 + vector ranking with configurable weights)
-- Heat decay (temporal aging: hot/warm/cold)
-- Backfill script for embedding existing facts/chunks
-
-### Phase 3 (Ideas)
-- Web UI dashboard for memory browsing
-- Multi-user support
-- Export/import memory between machines
-- Custom embedding models
+- **Concurrent CLIs**: Running Claude Code and Codex CLI simultaneously on the same project may cause session tracking conflicts. Use one CLI at a time per project.
+- **PostToolUse tracking**: Codex CLI does not have hooks, so file change tracking (the `changes` table) is not available for Codex sessions.
+- **TUI Dashboard**: Requires `textual` package. The TUI is read-only except for resolving contradictions.
 
 ## Contributing
 

@@ -1,18 +1,25 @@
 """Tab 7: Contradictions — Contradiction review."""
 
 from textual.app import ComposeResult
-from textual.widgets import DataTable, Static, Button
+from textual.widgets import DataTable, Static
 from textual.containers import Vertical
 
 from tui import data
 
 
 class ContradictionsScreen(Static):
-    """Contradictions browser with resolve action."""
+    """Contradictions browser with resolve action. Press Enter to resolve selected."""
 
     DEFAULT_CSS = """
     ContradictionsScreen {
         height: 1fr;
+    }
+    .resolve-hint {
+        dock: bottom;
+        height: 1;
+        background: $surface;
+        color: $text-muted;
+        padding: 0 1;
     }
     """
 
@@ -23,6 +30,7 @@ class ContradictionsScreen(Static):
 
     def compose(self) -> ComposeResult:
         yield DataTable(id="contradictions-table")
+        yield Static("[dim]Select a row and press Enter to resolve[/]", classes="resolve-hint")
 
     def on_mount(self) -> None:
         table = self.query_one("#contradictions-table", DataTable)
@@ -51,12 +59,14 @@ class ContradictionsScreen(Static):
 
             table.add_row(fact_a, fact_b, reason, detected, status, key=str(c.get("id", "")))
 
-    def on_key(self, event) -> None:
-        if event.key == "r":
-            table = self.query_one("#contradictions-table", DataTable)
-            if table.cursor_row is not None and table.cursor_row < len(self._contradictions):
-                c = self._contradictions[table.cursor_row]
-                if not c.get("resolved"):
-                    data.resolve_contradiction(c["id"])
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Resolve contradiction when row is selected (Enter key)."""
+        row_idx = event.cursor_row
+        if row_idx is not None and row_idx < len(self._contradictions):
+            c = self._contradictions[row_idx]
+            if not c.get("resolved"):
+                if data.resolve_contradiction(c["id"]):
                     self._load_data()
                     self.notify("Contradiction resolved", severity="information")
+                else:
+                    self.notify("Failed to resolve — DB may be busy", severity="error")

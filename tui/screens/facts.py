@@ -3,7 +3,6 @@
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Input, Select, Static
-from textual.message import Message
 
 from tui.widgets.heat_cell import heat_color, heat_label
 from tui import data

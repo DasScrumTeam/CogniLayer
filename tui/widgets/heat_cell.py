@@ -1,7 +1,6 @@
-"""Heat score widget with color coding."""
+"""Heat score widget with color coding and shared display utilities."""
 
 from textual.widgets import Static
-from textual.app import ComposeResult
 
 
 def heat_color(score: float) -> str:
@@ -28,6 +27,18 @@ def heat_bar(score: float, width: int = 10) -> str:
     color = heat_color(score)
     bar = "█" * filled + "░" * (width - filled)
     return f"[{color}]{bar}[/] {score:.2f}"
+
+
+def outcome_color(outcome: str) -> str:
+    """Return Rich color name for session outcome."""
+    o = (outcome or "").lower()
+    if o in ("success", "completed"):
+        return "green"
+    if o in ("partial", "interrupted"):
+        return "yellow"
+    if o in ("failed", "crashed"):
+        return "red"
+    return "white"
 
 
 class HeatCell(Static):

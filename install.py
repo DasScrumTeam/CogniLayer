@@ -1,8 +1,15 @@
-"""CogniLayer installer — copies files to ~/.cognilayer/ and registers in Claude Code."""
+"""CogniLayer installer — copies files to ~/.cognilayer/ and registers in Claude Code.
+
+Usage:
+    python install.py           # Install for Claude Code (default)
+    python install.py --codex   # Install for Codex CLI
+    python install.py --both    # Install for both
+"""
 
 import shutil
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 COGNILAYER_HOME = Path.home() / ".cognilayer"
@@ -11,8 +18,8 @@ REPO_DIR = Path(__file__).parent
 
 
 def check_python_version():
-    if sys.version_info < (3, 10):
-        print(f"ERROR: Python 3.10+ required. You have {sys.version}")
+    if sys.version_info < (3, 11):
+        print(f"ERROR: Python 3.11+ required (for tomllib). You have {sys.version}")
         sys.exit(1)
 
 
@@ -34,6 +41,25 @@ def check_pyyaml_installed():
         print("[!] pyyaml package not found. Installing...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyyaml"])
         print("[ok] pyyaml installed")
+
+
+def check_textual_installed():
+    try:
+        import textual  # noqa: F401
+        print(f"[ok] textual package found (v{textual.__version__})")
+    except ImportError:
+        print("[info] textual not found (optional — needed for TUI dashboard)")
+        print("       Install with: pip install textual")
+
+
+def backup_database():
+    """Backup memory.db before migration if it exists."""
+    db_path = COGNILAYER_HOME / "memory.db"
+    if db_path.exists():
+        backup_name = f"memory.db.backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        backup_path = COGNILAYER_HOME / backup_name
+        shutil.copy2(db_path, backup_path)
+        print(f"  [ok] Database backed up: {backup_name}")
 
 
 def copy_files():
@@ -163,21 +189,25 @@ def main():
     print("=" * 50)
     print()
 
-    print("[1/5] Checking Python version...")
+    print("[1/6] Checking Python version...")
     check_python_version()
     print(f"  [ok] Python {sys.version.split()[0]}")
 
-    print("\n[2/5] Checking dependencies...")
+    print("\n[2/6] Checking dependencies...")
     check_mcp_installed()
     check_pyyaml_installed()
+    check_textual_installed()
 
-    print("\n[3/5] Copying files...")
+    print("\n[3/6] Copying files...")
     copy_files()
 
-    print("\n[4/5] Initializing database...")
+    print("\n[4/6] Backing up database...")
+    backup_database()
+
+    print("\n[5/6] Initializing database...")
     init_database()
 
-    print("\n[5/5] Registering...")
+    print("\n[6/6] Registering...")
     if both_mode:
         register_mcp(codex=False)
         print()
@@ -204,8 +234,8 @@ def main():
     print()
     print("  4. Run /status to verify everything works")
     print()
-    print("  5. Launch TUI dashboard:")
-    print("     python -m cognilayer.tui")
+    print("  5. Launch TUI dashboard (requires textual):")
+    print("     python ~/.cognilayer/tui/app.py")
     print()
 
     # Optional: run test

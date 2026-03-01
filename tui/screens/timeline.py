@@ -3,6 +3,7 @@
 from textual.app import ComposeResult
 from textual.widgets import DataTable, Static
 
+from tui.widgets.heat_cell import outcome_color
 from tui import data
 
 
@@ -36,24 +37,13 @@ class TimelineScreen(Static):
             changes_c = s.get("changes_count") or 0
             bridge = (s.get("bridge_content") or "")[:50]
 
-            outcome_color = _outcome_color(outcome)
+            color = outcome_color(outcome)
 
             table.add_row(
                 date,
                 title[:30],
-                f"[{outcome_color}]{outcome}[/]",
+                f"[{color}]{outcome}[/]",
                 str(facts_c),
                 str(changes_c),
                 bridge or "-",
             )
-
-
-def _outcome_color(outcome: str) -> str:
-    o = (outcome or "").lower()
-    if o in ("success", "completed"):
-        return "green"
-    if o in ("partial", "interrupted"):
-        return "yellow"
-    if o in ("failed", "crashed"):
-        return "red"
-    return "white"

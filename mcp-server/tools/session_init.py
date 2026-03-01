@@ -23,7 +23,11 @@ DB_PATH = COGNILAYER_HOME / "memory.db"
 sys.path.insert(0, str(COGNILAYER_HOME / "hooks"))
 sys.path.insert(0, str(COGNILAYER_HOME / "mcp-server"))
 
-from i18n import t
+try:
+    from i18n import t
+except ImportError:
+    def t(key, **kwargs):
+        return key
 
 
 def session_init(project_path: str | None = None) -> str:
@@ -42,7 +46,7 @@ def session_init(project_path: str | None = None) -> str:
     else:
         path = Path.cwd()
 
-    if not path.exists():
+    if not path.exists() or not path.is_dir():
         return t("session_init.invalid_path", path=str(path))
 
     project_name = detect_project(path)
@@ -66,7 +70,6 @@ def session_init(project_path: str | None = None) -> str:
 
         db.commit()
     except Exception as e:
-        db.close()
         return t("session_init.error", error=str(e))
     finally:
         try:

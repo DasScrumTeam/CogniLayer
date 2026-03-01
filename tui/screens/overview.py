@@ -5,6 +5,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
 from tui.widgets.stats_card import StatsCard
+from tui.widgets.heat_cell import outcome_color
 from tui import data
 
 
@@ -76,18 +77,9 @@ class OverviewScreen(Static):
                     bridge = bridge[:200] + "..."
                 yield Static(
                     f"[bold]Last Session[/]\n"
-                    f"  [{_outcome_color(outcome)}]{outcome}[/] — {title}\n"
+                    f"  [{outcome_color(outcome)}]{outcome}[/] — {title}\n"
                     f"  {last.get('start_time', '?')}\n"
                     f"  [dim]{bridge}[/]"
                 )
 
 
-def _outcome_color(outcome: str) -> str:
-    o = (outcome or "").lower()
-    if o in ("success", "completed"):
-        return "green"
-    if o in ("partial", "interrupted"):
-        return "yellow"
-    if o in ("failed", "crashed"):
-        return "red"
-    return "white"

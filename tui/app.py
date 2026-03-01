@@ -27,7 +27,7 @@ class CogniLayerTUI(App):
 
     BINDINGS = [
         ("q", "quit", "Quit"),
-        ("r", "refresh", "Refresh"),
+        ("f5", "refresh", "Refresh"),
         ("1", "tab_1", "Overview"),
         ("2", "tab_2", "Facts"),
         ("3", "tab_3", "Heatmap"),

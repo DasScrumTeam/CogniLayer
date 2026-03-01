@@ -25,6 +25,7 @@ def open_db():
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA synchronous=NORMAL")
     db.execute("PRAGMA busy_timeout=5000")
+    db.execute("PRAGMA foreign_keys=ON")
     db.row_factory = sqlite3.Row
     return db
 

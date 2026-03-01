@@ -10,7 +10,9 @@ DB_PATH = Path.home() / ".cognilayer" / "memory.db"
 def _open() -> sqlite3.Connection:
     db = sqlite3.connect(str(DB_PATH))
     db.execute("PRAGMA journal_mode=WAL")
+    db.execute("PRAGMA synchronous=NORMAL")
     db.execute("PRAGMA busy_timeout=5000")
+    db.execute("PRAGMA foreign_keys=ON")
     db.row_factory = sqlite3.Row
     return db
 
@@ -301,11 +303,14 @@ def get_contradictions(project: str | None = None) -> list[dict]:
         db.close()
 
 
-def resolve_contradiction(contradiction_id: int):
-    """Mark a contradiction as resolved."""
+def resolve_contradiction(contradiction_id: int) -> bool:
+    """Mark a contradiction as resolved. Returns True on success."""
     db = _open()
     try:
         db.execute("UPDATE contradictions SET resolved = 1 WHERE id = ?", (contradiction_id,))
         db.commit()
+        return True
+    except Exception:
+        return False
     finally:
         db.close()
