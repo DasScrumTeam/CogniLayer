@@ -1,6 +1,6 @@
-# CogniLayer
+# CogniLayer v3
 
-### Your AI coding agent forgets everything. Every. Single. Session.
+### Persistent memory for AI coding agents. Your AI forgets everything. Every. Single. Session.
 
 You spend 20 minutes explaining your project structure. Claude reads 15 files. You debug a tricky issue together. Then the session ends — and **it's all gone**.
 
@@ -10,9 +10,12 @@ Next session? Start from zero. Re-read the same files. Re-explain the same archi
 
 It gives Claude Code and Codex CLI a **persistent memory** that survives across sessions, projects, and even crashes. Your AI assistant finally remembers what it learned.
 
+[![Version](https://img.shields.io/badge/version-3.0-orange.svg)](#)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-green.svg)](https://www.python.org/)
 [![MCP Server](https://img.shields.io/badge/MCP-13%20tools-purple.svg)](https://modelcontextprotocol.io/)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-supported-blueviolet.svg)](#)
+[![Codex CLI](https://img.shields.io/badge/Codex%20CLI-supported-blueviolet.svg)](#)
 
 ---
 
