@@ -1,6 +1,6 @@
 # CogniLayer v3
 
-### Persistent memory for AI coding agents. Your AI forgets everything. Every. Single. Session.
+### Your AI coding agent forgets everything. Every. Single. Session.
 
 You spend 20 minutes explaining your project structure. Claude reads 15 files. You debug a tricky issue together. Then the session ends — and **it's all gone**.
 
