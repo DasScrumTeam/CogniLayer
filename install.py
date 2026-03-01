@@ -17,8 +17,9 @@ from pathlib import Path
 COGNILAYER_HOME = Path.home() / ".cognilayer"
 CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
 CLAUDE_COMMANDS = Path.home() / ".claude" / "commands"
-REPO_DIR = Path(__file__).parent
+REPO_DIR = Path(__file__).parent.resolve()
 VERSION = (REPO_DIR / "VERSION").read_text(encoding="utf-8").strip()
+IS_SAME_DIR = REPO_DIR.resolve() == COGNILAYER_HOME.resolve()
 
 
 def _find_scripts_dir() -> Path | None:
@@ -113,8 +114,21 @@ def install_cli_wrapper():
             print(f"  [!] Add to PATH: export PATH=\"{scripts_dir}:$PATH\"")
 
 
+def _safe_copy(src: Path, dst: Path, label: str):
+    """Copy file, skip if src == dst (running from ~/.cognilayer/)."""
+    if src.resolve() == dst.resolve():
+        return
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dst)
+    print(f"  [copy] {label}")
+
+
 def copy_files():
     """Copy source files to ~/.cognilayer/"""
+    if IS_SAME_DIR:
+        print("  [info] Running from ~/.cognilayer/ — skipping file copy (already in place)")
+        install_cli_wrapper()
+        return
     dirs_to_create = [
         COGNILAYER_HOME,
         COGNILAYER_HOME / "mcp-server" / "indexer",
