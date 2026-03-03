@@ -1,16 +1,16 @@
-# CogniLayer v4
+# 🧠 CogniLayer v4
 
-### One brain for Claude Code & Codex CLI. Shared knowledge, code intelligence, zero re-learning.
+### A shared brain for Claude Code and Codex CLI.
 
-Debug a tricky auth issue with Claude Code in the morning, switch to Codex CLI in the afternoon — **it already knows what happened.** No re-reading files, no re-explaining architecture, no wasted tokens. That's not just persistent memory, that's **agent interoperability**.
+Without CogniLayer, your AI agent starts every session blind. It re-reads files, re-discovers architecture, re-learns decisions you explained last week. On a 50-file project, that's 80-100K tokens burned before real work begins.
 
-AI coding agents are powerful, but they start every session blind — re-read files, re-discover architecture, re-learn your decisions. On a 50-file project that's 80-100K tokens burned before real work begins. **CogniLayer fixes that.**
+With CogniLayer, it already knows. Three things your agent doesn't have today:
 
-It's a local MCP server that gives Claude Code and Codex CLI three things they don't have:
+🔗 **Persistent knowledge across agents** — facts, decisions, error fixes, gotchas survive across sessions, crashes, and agents. Start in Claude Code, continue in Codex CLI — zero context loss
 
-1. **Shared persistent knowledge** — facts, decisions, gotchas, error fixes survive across sessions, crashes, and agents. Start in Claude Code, finish in Codex — same brain
-2. **Code intelligence** — understands your codebase structure: who calls what, what breaks if you change something
-3. **Safety layer** — verifies deployment targets before you push to the wrong server
+🔍 **Code intelligence** — who calls what, what depends on what, what breaks if you rename a function. Tree-sitter AST parsing across 10+ languages, not grep
+
+⚡ **80-100K tokens saved per session** — 3 semantic queries replace 15 file reads. Your agent works faster because it already knows your codebase
 
 [![Version](https://img.shields.io/badge/version-4.0.0-orange.svg)](#)
 [![License: Elastic-2.0](https://img.shields.io/badge/License-Elastic%202.0-blue.svg)](LICENSE)
