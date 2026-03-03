@@ -79,6 +79,27 @@ code_impact("processOrder")
 
 Claude already knows the architecture, the past bugs, **and** what will break if it touches the wrong thing. Instead of 15 file reads (~60K tokens), it uses **3 targeted queries (~800 tokens)**.
 
+### Code Intelligence: "What happens if I change processOrder?"
+
+Without CogniLayer, Claude greps for the function name and hopes for the best. With it:
+
+```
+code_context("processOrder")
+→ definition: src/services/order.ts:42
+→ incoming (who calls it): StripeWebhookHandler.handle, OrderController.retry,
+   AdminPanel.reprocessOrder
+→ outgoing (what it calls): createOrderRecord, sendConfirmationEmail,
+   updateInventory, PaymentLog.write
+
+code_impact("processOrder")
+→ depth 1 (WILL BREAK):  StripeWebhookHandler, OrderController, AdminPanel
+→ depth 2 (LIKELY AFFECTED): WebhookRouter, RetryQueue, AdminRoutes
+→ depth 3 (NEED TESTING): 3 test files, 1 integration test
+→ "Changing processOrder will affect 9 symbols across 7 files"
+```
+
+Before touching a single line, Claude knows the **full blast radius** — which files will break, which need testing, and which callers depend on the current behavior. No more surprise failures after a refactor.
+
 ### Refactoring: "Rename UserService to AccountService"
 
 ```
