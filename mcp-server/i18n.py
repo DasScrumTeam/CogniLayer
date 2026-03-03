@@ -151,7 +151,8 @@ _EN: dict[str, str] = {
     # ======================================================================
     # file_search.py
     # ======================================================================
-    "file_search.no_results": "No chunks found for '{query}'. Files may not be indexed yet.",
+    "file_search.no_results": "No results found for '{query}'.",
+    "file_search.not_indexed": "No results found for '{query}'.\nNote: No documents indexed for this project yet. Run /onboard to index project docs (PRD, README, configs).",
     "file_search.header": "## Found {count} chunks for '{query}'\n",
     "file_search.no_title": "(no heading)",
     "file_search.section_label": "section",
@@ -274,53 +275,54 @@ _EN: dict[str, str] = {
     # ======================================================================
     "claude_md.template": (
         "## CogniLayer v4 Active\n"
-        "Persistent memory is ON.\n"
+        "Persistent memory + code intelligence is ON.\n"
         "ON FIRST USER MESSAGE in this session, briefly tell the user:\n"
         "  'CogniLayer v4 active — persistent memory is on. Type /cognihelp for available commands.'\n"
         "Say it ONCE, keep it short, then continue with their request.\n"
         "\n"
-        "## Memory Tools\n"
-        "You have access to the `cognilayer` MCP server:\n"
-        "- memory_search(query) — search memory semantically\n"
-        "- memory_write(content) — save important information\n"
-        "- file_search(query) — search project files (PRD, docs...)\n"
-        "- decision_log(query) — find past decisions\n"
+        "## Tools — HOW TO WORK\n"
         "\n"
-        "When unsure about context or project history,\n"
-        "ALWAYS search memory first via memory_search.\n"
-        "When you need info from PRD or docs, use file_search\n"
-        "INSTEAD of reading the entire file.\n"
+        "FIRST RUN ON A PROJECT:\n"
+        'When DNA shows "[new session]" or "[first session]":\n'
+        "1. Run /onboard — indexes project docs (PRD, README), builds initial memory\n"
+        "2. Run code_index() — builds AST index for code intelligence\n"
+        "Both are one-time. After that, updates are incremental.\n"
+        "If file_search or code_search return empty → these haven't been run yet.\n"
         "\n"
-        "## VERIFY-BEFORE-ACT — MANDATORY\n"
-        "When memory_search returns a fact marked with ⚠ STALE:\n"
-        "1. ALWAYS read the source file and verify the fact still holds\n"
-        "2. If the fact changed -> update it via memory_write\n"
-        "3. NEVER make changes based on STALE facts without verification\n"
+        "UNDERSTAND FIRST (before making changes):\n"
+        "- memory_search(query) → what do we know? Past bugs, decisions, gotchas\n"
+        "- code_context(symbol) → how does the code work? Callers, callees, dependencies\n"
+        "- file_search(query) → search project docs (PRD, README) without reading full files\n"
+        "- code_search(query) → find where a function/class is defined\n"
+        "Use BOTH memory + code tools for complete picture. They are fast — call in parallel.\n"
         "\n"
-        "## PROACTIVE MEMORY — IMPORTANT\n"
-        "When you discover something important during work, SAVE IT IMMEDIATELY:\n"
-        '- Bug and fix -> memory_write(type="error_fix")\n'
-        '- Pitfall/danger -> memory_write(type="gotcha")\n'
-        '- Exact procedure -> memory_write(type="procedure")\n'
-        '- How components communicate -> memory_write(type="api_contract")\n'
-        '- Performance issue -> memory_write(type="performance")\n'
-        '- Important command -> memory_write(type="command")\n'
+        "BEFORE RISKY CHANGES (mandatory):\n"
+        "- Renaming, deleting, or moving a function/class → code_impact(symbol) FIRST\n"
+        "- Changing a function's signature or return value → code_impact(symbol) FIRST\n"
+        "- Modifying shared utilities used across multiple files → code_impact(symbol) FIRST\n"
+        "- ALSO: memory_search(symbol) → check for related decisions or known gotchas\n"
+        "Both required. Structure tells you what breaks, memory tells you WHY it was built that way.\n"
+        "\n"
+        "AFTER COMPLETING WORK:\n"
+        "- memory_write(content) → save important discoveries immediately\n"
+        "  (error_fix, gotcha, pattern, api_contract, procedure, decision)\n"
+        '- session_bridge(action="save", content="Progress: ...; Open: ...")\n'
         "DO NOT wait for /harvest — session may crash.\n"
         "\n"
-        "## RUNNING BRIDGE — CRITICAL\n"
-        "After completing each task AUTOMATICALLY update session bridge:\n"
-        '  session_bridge(action="save", content="Progress: ...; Open: ...")\n'
-        "This is Tier 1 — do it yourself, don't announce, it's part of the job.\n"
+        "BEFORE DEPLOY/PUSH:\n"
+        '- verify_identity(action_type="...") → mandatory safety gate\n'
+        "- If BLOCKED → STOP and ask the user\n"
+        "- If VERIFIED → READ the target server to the user and request confirmation\n"
         "\n"
-        "## Safety Rules — MANDATORY\n"
-        "- Before ANY deploy, push, ssh, pm2, docker, db migration:\n"
-        '  1. ALWAYS call verify_identity(action_type="...") first\n'
-        "  2. If it returns BLOCKED — STOP and ask the user\n"
-        "  3. If it returns VERIFIED — READ the target server to the user and request confirmation\n"
+        "## VERIFY-BEFORE-ACT\n"
+        "When memory_search returns a fact marked ⚠ STALE:\n"
+        "1. Read the source file and verify the fact still holds\n"
+        "2. If changed → update via memory_write\n"
+        "3. NEVER act on STALE facts without verification\n"
         "\n"
         "## Process Management (Windows)\n"
-        "- NEVER use `taskkill //F //IM node.exe` — it kills ALL Node.js processes INCLUDING Claude Code CLI!\n"
-        "- To stop a dev server: `npx kill-port PORT` or find PID via `netstat -ano | findstr :PORT` then `taskkill //F //PID XXXX`\n"
+        "- NEVER use `taskkill //F //IM node.exe` — kills ALL Node.js INCLUDING Claude Code CLI!\n"
+        "- Use: `npx kill-port PORT` or find PID via `netstat -ano | findstr :PORT` then `taskkill //F //PID XXXX`\n"
         "\n"
         "## Git Rules\n"
         '- Commit often, small atomic changes. Format: "[type] what and why"\n'
@@ -650,7 +652,8 @@ _CS: dict[str, str] = {
     # ======================================================================
     # file_search.py
     # ======================================================================
-    "file_search.no_results": "Zadne chunky nalezeny pro '{query}'. Soubory mozna nebyly zaindexovany.",
+    "file_search.no_results": "Zadne vysledky pro '{query}'.",
+    "file_search.not_indexed": "Zadne vysledky pro '{query}'.\nPoznamka: Pro tento projekt nebyly zaindexovany zadne dokumenty. Spust /onboard pro indexaci docs (PRD, README, konfigurace).",
     "file_search.header": "## Nalezeno {count} chunku pro '{query}'\n",
     "file_search.no_title": "(bez nadpisu)",
     "file_search.section_label": "sekce",
@@ -773,53 +776,54 @@ _CS: dict[str, str] = {
     # ======================================================================
     "claude_md.template": (
         "## CogniLayer v4 Aktivni\n"
-        "Trvala pamet je ZAPNUTA.\n"
+        "Trvala pamet + code intelligence je ZAPNUTA.\n"
         "PRI PRVNI ZPRAVE UZIVATELE v teto session mu strucne rekni:\n"
         "  'CogniLayer v4 aktivni — trvala pamet zapnuta. Napis /cognihelp pro prehled prikazu.'\n"
         "Rekni to JEDNOU, strucne, pak pokracuj s jeho pozadavkem.\n"
         "\n"
-        "## Pametove nastroje\n"
-        "Mas pristup k MCP serveru `cognilayer`:\n"
-        "- memory_search(query) — prohledej pamet semanticky\n"
-        "- memory_write(content) — zapamatuj si dulezitou informaci\n"
-        "- file_search(query) — hledej v projektovych souborech (PRD, docs...)\n"
-        "- decision_log(query) — najdi minula rozhodnuti\n"
+        "## Nastroje — JAK PRACOVAT\n"
         "\n"
-        "Kdyz si nejsi jisty kontextem nebo historii projektu,\n"
-        "VZDY nejdriv prohledej pamet pomoci memory_search.\n"
-        "Kdyz potrebujes info z PRD nebo docs, pouzij file_search\n"
-        "MISTO cteni celeho souboru.\n"
+        "PRVNI SPUSTENI NA PROJEKTU:\n"
+        'Kdyz DNA ukazuje "[nova session]" nebo "[prvni session]":\n'
+        "1. Spust /onboard — zaindexuje docs projektu (PRD, README), vytvori zakladni pamet\n"
+        "2. Spust code_index() — vytvori AST index pro code intelligence\n"
+        "Oboje je jednorazove. Potom se aktualizuje inkrementalne.\n"
+        "Pokud file_search nebo code_search vraci prazdno → jeste nebyly spusteny.\n"
         "\n"
-        "## VERIFY-BEFORE-ACT — POVINNE\n"
-        "Kdyz memory_search vrati fakt oznaceny ⚠ STALE:\n"
-        "1. VZDY precti zdrojovy soubor a over ze fakt stale plati\n"
-        "2. Pokud se fakt zmenil → aktualizuj ho pres memory_write\n"
-        "3. NIKDY nedelej zmeny na zaklade STALE faktu bez overeni\n"
+        "NEJDRIV POCHOP (pred zmenami):\n"
+        "- memory_search(query) → co vime? Minule bugy, rozhodnuti, gotchas\n"
+        "- code_context(symbol) → jak kod funguje? Kdo vola, co vola, zavislosti\n"
+        "- file_search(query) → hledej v docs projektu (PRD, README) bez cteni celych souboru\n"
+        "- code_search(query) → najdi kde je funkce/trida definovana\n"
+        "Pouzij OBOJI pamet + code nastroje pro uplny obraz. Jsou rychle — volej paralelne.\n"
         "\n"
-        "## PROAKTIVNI PAMET — DULEZITE\n"
-        "Kdyz behem prace zjistis neco duleziteho, OKAMZITE to uloz:\n"
-        '- Chyba a oprava → memory_write(type="error_fix")\n'
-        '- Past/nebezpeci → memory_write(type="gotcha")\n'
-        '- Presny postup → memory_write(type="procedure")\n'
-        '- Jak komponenty komunikuji → memory_write(type="api_contract")\n'
-        '- Vykonovy problem → memory_write(type="performance")\n'
-        '- Dulezity prikaz → memory_write(type="command")\n'
+        "PRED RIZIKOVOU ZMENOU (povinne):\n"
+        "- Prejmenovani, mazani, presun funkce/tridy → code_impact(symbol) NEJDRIV\n"
+        "- Zmena signatury nebo navratove hodnoty → code_impact(symbol) NEJDRIV\n"
+        "- Uprava sdilenych utilit pouzivanych v mnoha souborech → code_impact(symbol) NEJDRIV\n"
+        "- TAKE: memory_search(symbol) → over souvisejici rozhodnuti nebo zname gotchas\n"
+        "Oboji je nutne. Struktura rekne co se rozbije, pamet rekne PROC to bylo tak postavene.\n"
+        "\n"
+        "PO DOKONCENI PRACE:\n"
+        "- memory_write(content) → uloz dulezite zjisteni okamzite\n"
+        "  (error_fix, gotcha, pattern, api_contract, procedure, decision)\n"
+        '- session_bridge(action="save", content="Progress: ...; Open: ...")\n'
         "NECEKEJ na /harvest — session muze crashnout.\n"
         "\n"
-        "## RUNNING BRIDGE — KRITICKE\n"
-        "Po kazdem dokonceni ukolu AUTOMATICKY aktualizuj session bridge:\n"
-        '  session_bridge(action="save", content="Progress: ...; Open: ...")\n'
-        "Toto je Tier 1 — delej sam, neoznamuj, je to soucast prace.\n"
+        "PRED DEPLOY/PUSH:\n"
+        '- verify_identity(action_type="...") → povinna safety brana\n'
+        "- Pokud BLOCKED → ZASTAV a zeptej se uzivatele\n"
+        "- Pokud VERIFIED → PRECTI uzivateli cilovy server a pozadej potvrzeni\n"
         "\n"
-        "## Safety pravidla — POVINNE\n"
-        "- Pred JAKYMKOLIV deployem, push, ssh, pm2, docker, db migraci:\n"
-        '  1. VZDY nejdriv zavolej verify_identity(action_type="...")\n'
-        "  2. Pokud vrati BLOCKED — ZASTAV a zeptej se uzivatele\n"
-        "  3. Pokud vrati VERIFIED — PRECTI uzivateli cilovy server a pozadej potvrzeni\n"
+        "## VERIFY-BEFORE-ACT\n"
+        "Kdyz memory_search vrati fakt oznaceny ⚠ STALE:\n"
+        "1. Precti zdrojovy soubor a over ze fakt stale plati\n"
+        "2. Pokud se zmenil → aktualizuj pres memory_write\n"
+        "3. NIKDY nedelej zmeny na zaklade STALE faktu bez overeni\n"
         "\n"
         "## Sprava procesu (Windows)\n"
-        "- NIKDY nepouzivej `taskkill //F //IM node.exe` — zabije VSECHNY Node.js procesy VCETNE Claude Code CLI!\n"
-        "- Pro zastaveni dev serveru: `npx kill-port PORT` nebo najdi PID pres `netstat -ano | findstr :PORT` a pak `taskkill //F //PID XXXX`\n"
+        "- NIKDY nepouzivej `taskkill //F //IM node.exe` — zabije VSECHNY Node.js VCETNE Claude Code CLI!\n"
+        "- Pouzij: `npx kill-port PORT` nebo najdi PID pres `netstat -ano | findstr :PORT` pak `taskkill //F //PID XXXX`\n"
         "\n"
         "## Git pravidla\n"
         '- Commituj casto, male atomicke zmeny. Format: "[typ] co a proc"\n'

@@ -35,6 +35,20 @@ def file_search(query: str, scope: str = "project",
         db.close()
 
     if not results:
+        # Check if project has ANY chunks indexed
+        db2 = open_db()
+        try:
+            chunk_count = db2.execute(
+                "SELECT COUNT(*) FROM file_chunks WHERE project = ?",
+                (search_project or project,)
+            ).fetchone()[0]
+        except Exception:
+            chunk_count = -1
+        finally:
+            db2.close()
+
+        if chunk_count == 0:
+            return t("file_search.not_indexed", query=query)
         return t("file_search.no_results", query=query)
 
     lines = [t("file_search.header", count=len(results), query=query)]
