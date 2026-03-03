@@ -328,7 +328,7 @@ CREATE INDEX IF NOT EXISTS idx_chunks_file ON file_chunks(project, file_path);
 CREATE INDEX IF NOT EXISTS idx_changes_session ON changes(session_id);
 CREATE INDEX IF NOT EXISTS idx_changes_project ON changes(project, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project, start_time DESC);
-CREATE INDEX IF NOT EXISTS idx_sessions_claude_sid ON sessions(claude_session_id);
+-- idx_sessions_claude_sid created in upgrade_schema() (column added during migration)
 CREATE INDEX IF NOT EXISTS idx_identity_framework ON project_identity(framework);
 CREATE INDEX IF NOT EXISTS idx_identity_category ON project_identity(project_category);
 CREATE INDEX IF NOT EXISTS idx_identity_ssh ON project_identity(deploy_ssh_alias);
