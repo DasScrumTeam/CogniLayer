@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     episode_title TEXT,
     episode_tags TEXT,
     outcome TEXT,
+    claude_session_id TEXT,
     FOREIGN KEY (project) REFERENCES projects(name)
 );
 
@@ -249,6 +250,59 @@ CREATE TABLE IF NOT EXISTS causal_chains (
     FOREIGN KEY (effect_id) REFERENCES facts(id) ON DELETE CASCADE
 );
 
+-- Code Intelligence: tracked source files
+CREATE TABLE IF NOT EXISTS code_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    language TEXT NOT NULL,
+    file_mtime REAL NOT NULL,
+    file_size INTEGER DEFAULT 0,
+    symbol_count INTEGER DEFAULT 0,
+    is_dirty INTEGER DEFAULT 0,
+    indexed_at TEXT NOT NULL,
+    UNIQUE(project, file_path),
+    FOREIGN KEY (project) REFERENCES projects(name)
+);
+
+-- Code Intelligence: symbols (functions, classes, methods, interfaces)
+CREATE TABLE IF NOT EXISTS code_symbols (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project TEXT NOT NULL,
+    file_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    qualified_name TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK(kind IN
+        ('function','class','method','interface','variable','type_alias','enum','module')),
+    line_start INTEGER NOT NULL,
+    line_end INTEGER NOT NULL,
+    parent_id INTEGER,
+    signature TEXT,
+    docstring TEXT,
+    exported INTEGER DEFAULT 0,
+    FOREIGN KEY (project) REFERENCES projects(name),
+    FOREIGN KEY (file_id) REFERENCES code_files(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_id) REFERENCES code_symbols(id) ON DELETE SET NULL
+);
+
+-- Code Intelligence: references (calls, imports, inheritance)
+CREATE TABLE IF NOT EXISTS code_references (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project TEXT NOT NULL,
+    file_id INTEGER NOT NULL,
+    from_symbol_id INTEGER,
+    to_symbol_id INTEGER,
+    to_name TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK(kind IN
+        ('call','import','inherit','implement','type_ref','decorator')),
+    line INTEGER NOT NULL,
+    confidence REAL DEFAULT 0.5,
+    FOREIGN KEY (project) REFERENCES projects(name),
+    FOREIGN KEY (file_id) REFERENCES code_files(id) ON DELETE CASCADE,
+    FOREIGN KEY (from_symbol_id) REFERENCES code_symbols(id) ON DELETE CASCADE,
+    FOREIGN KEY (to_symbol_id) REFERENCES code_symbols(id) ON DELETE SET NULL
+);
+
 -- Indexes for fast queries
 CREATE INDEX IF NOT EXISTS idx_facts_project ON facts(project);
 CREATE INDEX IF NOT EXISTS idx_facts_type ON facts(project, type);
@@ -258,6 +312,7 @@ CREATE INDEX IF NOT EXISTS idx_chunks_file ON file_chunks(project, file_path);
 CREATE INDEX IF NOT EXISTS idx_changes_session ON changes(session_id);
 CREATE INDEX IF NOT EXISTS idx_changes_project ON changes(project, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project, start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_claude_sid ON sessions(claude_session_id);
 CREATE INDEX IF NOT EXISTS idx_identity_framework ON project_identity(framework);
 CREATE INDEX IF NOT EXISTS idx_identity_category ON project_identity(project_category);
 CREATE INDEX IF NOT EXISTS idx_identity_ssh ON project_identity(deploy_ssh_alias);
@@ -267,6 +322,18 @@ CREATE INDEX IF NOT EXISTS idx_fact_links_source ON fact_links(source_id);
 CREATE INDEX IF NOT EXISTS idx_fact_links_target ON fact_links(target_id);
 CREATE INDEX IF NOT EXISTS idx_gaps_project ON knowledge_gaps(project);
 CREATE INDEX IF NOT EXISTS idx_gaps_resolved ON knowledge_gaps(resolved);
+CREATE INDEX IF NOT EXISTS idx_code_files_project ON code_files(project);
+CREATE INDEX IF NOT EXISTS idx_code_files_dirty ON code_files(project, is_dirty);
+CREATE INDEX IF NOT EXISTS idx_code_symbols_project ON code_symbols(project);
+CREATE INDEX IF NOT EXISTS idx_code_symbols_file ON code_symbols(file_id);
+CREATE INDEX IF NOT EXISTS idx_code_symbols_name ON code_symbols(name);
+CREATE INDEX IF NOT EXISTS idx_code_symbols_qname ON code_symbols(qualified_name);
+CREATE INDEX IF NOT EXISTS idx_code_symbols_kind ON code_symbols(project, kind);
+CREATE INDEX IF NOT EXISTS idx_code_refs_project ON code_references(project);
+CREATE INDEX IF NOT EXISTS idx_code_refs_file ON code_references(file_id);
+CREATE INDEX IF NOT EXISTS idx_code_refs_from ON code_references(from_symbol_id);
+CREATE INDEX IF NOT EXISTS idx_code_refs_to ON code_references(to_symbol_id);
+CREATE INDEX IF NOT EXISTS idx_code_refs_to_name ON code_references(to_name);
 """
 
 # FTS5 virtual tables and sync triggers (separated for graceful fallback)
@@ -293,6 +360,29 @@ CREATE TRIGGER IF NOT EXISTS facts_au AFTER UPDATE ON facts BEGIN
     VALUES ('delete', old.rowid, old.content, old.tags, old.domain);
     INSERT INTO facts_fts(rowid, content, tags, domain)
     VALUES (new.rowid, new.content, new.tags, new.domain);
+END;
+
+-- FTS5 fulltext index on code_symbols
+CREATE VIRTUAL TABLE IF NOT EXISTS code_symbols_fts USING fts5(
+    name, qualified_name, signature, docstring,
+    content=code_symbols, content_rowid=rowid
+);
+
+CREATE TRIGGER IF NOT EXISTS code_symbols_ai AFTER INSERT ON code_symbols BEGIN
+    INSERT INTO code_symbols_fts(rowid, name, qualified_name, signature, docstring)
+    VALUES (new.rowid, new.name, new.qualified_name, new.signature, new.docstring);
+END;
+
+CREATE TRIGGER IF NOT EXISTS code_symbols_ad AFTER DELETE ON code_symbols BEGIN
+    INSERT INTO code_symbols_fts(code_symbols_fts, rowid, name, qualified_name, signature, docstring)
+    VALUES ('delete', old.rowid, old.name, old.qualified_name, old.signature, old.docstring);
+END;
+
+CREATE TRIGGER IF NOT EXISTS code_symbols_au AFTER UPDATE ON code_symbols BEGIN
+    INSERT INTO code_symbols_fts(code_symbols_fts, rowid, name, qualified_name, signature, docstring)
+    VALUES ('delete', old.rowid, old.name, old.qualified_name, old.signature, old.docstring);
+    INSERT INTO code_symbols_fts(rowid, name, qualified_name, signature, docstring)
+    VALUES (new.rowid, new.name, new.qualified_name, new.signature, new.docstring);
 END;
 
 -- FTS5 fulltext index on file_chunks
@@ -346,11 +436,12 @@ def upgrade_schema(db):
         except sqlite3.OperationalError:
             pass  # Column already exists
 
-    # New columns on sessions table (episode metadata)
+    # New columns on sessions table (episode metadata + multi-CLI)
     for col, typedef in [
         ("episode_title", "TEXT"),
         ("episode_tags", "TEXT"),
         ("outcome", "TEXT"),
+        ("claude_session_id", "TEXT"),
     ]:
         try:
             db.execute(f"ALTER TABLE sessions ADD COLUMN {col} {typedef}")
@@ -429,6 +520,66 @@ def upgrade_schema(db):
         CREATE INDEX IF NOT EXISTS idx_causal_project ON causal_chains(project);
         CREATE INDEX IF NOT EXISTS idx_facts_tier ON facts(knowledge_tier);
         CREATE INDEX IF NOT EXISTS idx_facts_cluster ON facts(cluster_id);
+        CREATE INDEX IF NOT EXISTS idx_sessions_claude_sid ON sessions(claude_session_id);
+
+        -- Code Intelligence tables (V4)
+        CREATE TABLE IF NOT EXISTS code_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            language TEXT NOT NULL,
+            file_mtime REAL NOT NULL,
+            file_size INTEGER DEFAULT 0,
+            symbol_count INTEGER DEFAULT 0,
+            is_dirty INTEGER DEFAULT 0,
+            indexed_at TEXT NOT NULL,
+            UNIQUE(project, file_path),
+            FOREIGN KEY (project) REFERENCES projects(name)
+        );
+        CREATE TABLE IF NOT EXISTS code_symbols (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project TEXT NOT NULL,
+            file_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            qualified_name TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            line_start INTEGER NOT NULL,
+            line_end INTEGER NOT NULL,
+            parent_id INTEGER,
+            signature TEXT,
+            docstring TEXT,
+            exported INTEGER DEFAULT 0,
+            FOREIGN KEY (project) REFERENCES projects(name),
+            FOREIGN KEY (file_id) REFERENCES code_files(id) ON DELETE CASCADE,
+            FOREIGN KEY (parent_id) REFERENCES code_symbols(id) ON DELETE SET NULL
+        );
+        CREATE TABLE IF NOT EXISTS code_references (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project TEXT NOT NULL,
+            file_id INTEGER NOT NULL,
+            from_symbol_id INTEGER,
+            to_symbol_id INTEGER,
+            to_name TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            line INTEGER NOT NULL,
+            confidence REAL DEFAULT 0.5,
+            FOREIGN KEY (project) REFERENCES projects(name),
+            FOREIGN KEY (file_id) REFERENCES code_files(id) ON DELETE CASCADE,
+            FOREIGN KEY (from_symbol_id) REFERENCES code_symbols(id) ON DELETE CASCADE,
+            FOREIGN KEY (to_symbol_id) REFERENCES code_symbols(id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_code_files_project ON code_files(project);
+        CREATE INDEX IF NOT EXISTS idx_code_files_dirty ON code_files(project, is_dirty);
+        CREATE INDEX IF NOT EXISTS idx_code_symbols_project ON code_symbols(project);
+        CREATE INDEX IF NOT EXISTS idx_code_symbols_file ON code_symbols(file_id);
+        CREATE INDEX IF NOT EXISTS idx_code_symbols_name ON code_symbols(name);
+        CREATE INDEX IF NOT EXISTS idx_code_symbols_qname ON code_symbols(qualified_name);
+        CREATE INDEX IF NOT EXISTS idx_code_symbols_kind ON code_symbols(project, kind);
+        CREATE INDEX IF NOT EXISTS idx_code_refs_project ON code_references(project);
+        CREATE INDEX IF NOT EXISTS idx_code_refs_file ON code_references(file_id);
+        CREATE INDEX IF NOT EXISTS idx_code_refs_from ON code_references(from_symbol_id);
+        CREATE INDEX IF NOT EXISTS idx_code_refs_to ON code_references(to_symbol_id);
+        CREATE INDEX IF NOT EXISTS idx_code_refs_to_name ON code_references(to_name);
     """)
     db.commit()
 
