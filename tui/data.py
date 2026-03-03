@@ -303,6 +303,190 @@ def get_contradictions(project: str | None = None) -> list[dict]:
         db.close()
 
 
+def get_code_stats(project: str | None = None) -> dict | None:
+    """Get code intelligence statistics. Returns None if tables don't exist."""
+    db = _open()
+    try:
+        # Check if code tables exist
+        tables = db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('code_files','code_symbols','code_references')"
+        ).fetchall()
+        if len(tables) < 3:
+            return None
+
+        where = "WHERE project = ?" if project else ""
+        params = (project,) if project else ()
+
+        files_count = db.execute(
+            f"SELECT COUNT(*) FROM code_files {where}", params
+        ).fetchone()[0]
+        symbols_count = db.execute(
+            f"SELECT COUNT(*) FROM code_symbols {where}", params
+        ).fetchone()[0]
+        refs_count = db.execute(
+            f"SELECT COUNT(*) FROM code_references {where}", params
+        ).fetchone()[0]
+
+        langs = db.execute(
+            f"SELECT DISTINCT language FROM code_files {where} ORDER BY language", params
+        ).fetchall()
+
+        return {
+            "files": files_count,
+            "symbols": symbols_count,
+            "references": refs_count,
+            "languages": [r[0] for r in langs],
+        }
+    except Exception:
+        return None
+    finally:
+        db.close()
+
+
+def get_code_symbol_kinds(project: str | None = None) -> list[str]:
+    """Get distinct symbol kinds for filter dropdown."""
+    db = _open()
+    try:
+        where = "WHERE project = ?" if project else ""
+        params = (project,) if project else ()
+        rows = db.execute(
+            f"SELECT DISTINCT kind FROM code_symbols {where} ORDER BY kind", params
+        ).fetchall()
+        return [r[0] for r in rows]
+    except Exception:
+        return []
+    finally:
+        db.close()
+
+
+def get_code_files_with_symbols(project: str | None = None, kind_filter: str | None = None,
+                                 limit: int = 100) -> list[dict]:
+    """Get files with their symbols (2-phase: files, then batch symbols)."""
+    db = _open()
+    try:
+        # Phase 1: Get files
+        conditions = []
+        params = []
+        if project:
+            conditions.append("f.project = ?")
+            params.append(project)
+
+        # Only get files that have symbols matching the kind filter
+        if kind_filter:
+            conditions.append("f.id IN (SELECT DISTINCT file_id FROM code_symbols WHERE kind = ?)")
+            params.append(kind_filter)
+
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+        params.append(limit)
+
+        files = db.execute(f"""
+            SELECT f.id, f.file_path, f.language, f.symbol_count
+            FROM code_files f
+            {where}
+            ORDER BY f.file_path
+            LIMIT ?
+        """, params).fetchall()
+
+        if not files:
+            return []
+
+        # Phase 2: Batch load symbols for these files
+        file_ids = [f["id"] for f in files]
+        placeholders = ",".join("?" * len(file_ids))
+
+        sym_params = list(file_ids)
+        kind_clause = ""
+        if kind_filter:
+            kind_clause = "AND s.kind = ?"
+            sym_params.append(kind_filter)
+
+        symbols = db.execute(f"""
+            SELECT s.id, s.file_id, s.name, s.kind, s.line_start, s.line_end, s.signature
+            FROM code_symbols s
+            WHERE s.file_id IN ({placeholders}) {kind_clause}
+            ORDER BY s.line_start
+        """, sym_params).fetchall()
+
+        # Group symbols by file_id
+        sym_by_file: dict[int, list[dict]] = {}
+        for s in symbols:
+            fid = s["file_id"]
+            if fid not in sym_by_file:
+                sym_by_file[fid] = []
+            sym_by_file[fid].append(dict(s))
+
+        result = []
+        for f in files:
+            file_syms = sym_by_file.get(f["id"], [])
+            if kind_filter and not file_syms:
+                continue
+            result.append({
+                **dict(f),
+                "symbols": file_syms,
+            })
+
+        return result
+    except Exception:
+        return []
+    finally:
+        db.close()
+
+
+def get_symbol_detail(symbol_id: int) -> dict | None:
+    """Get full symbol detail with file info."""
+    db = _open()
+    try:
+        row = db.execute("""
+            SELECT s.id, s.name, s.qualified_name, s.kind, s.line_start, s.line_end,
+                   s.signature, s.docstring, s.exported, s.parent_id,
+                   f.file_path, f.language
+            FROM code_symbols s
+            JOIN code_files f ON s.file_id = f.id
+            WHERE s.id = ?
+        """, (symbol_id,)).fetchone()
+        return dict(row) if row else None
+    except Exception:
+        return None
+    finally:
+        db.close()
+
+
+def get_symbol_references(symbol_id: int) -> dict:
+    """Get incoming and outgoing references for a symbol."""
+    db = _open()
+    try:
+        incoming = db.execute("""
+            SELECT r.kind, r.line, r.confidence,
+                   s.name as from_name, s.kind as from_kind,
+                   f.file_path
+            FROM code_references r
+            LEFT JOIN code_symbols s ON r.from_symbol_id = s.id
+            LEFT JOIN code_files f ON r.file_id = f.id
+            WHERE r.to_symbol_id = ?
+            ORDER BY f.file_path, r.line
+        """, (symbol_id,)).fetchall()
+
+        outgoing = db.execute("""
+            SELECT r.kind, r.line, r.confidence, r.to_name,
+                   s.name as to_resolved_name, s.kind as to_kind,
+                   f.file_path
+            FROM code_references r
+            LEFT JOIN code_symbols s ON r.to_symbol_id = s.id
+            LEFT JOIN code_files f ON r.file_id = f.id
+            WHERE r.from_symbol_id = ?
+            ORDER BY f.file_path, r.line
+        """, (symbol_id,)).fetchall()
+
+        return {
+            "incoming": [dict(r) for r in incoming],
+            "outgoing": [dict(r) for r in outgoing],
+        }
+    except Exception:
+        return {"incoming": [], "outgoing": []}
+    finally:
+        db.close()
+
+
 def resolve_contradiction(contradiction_id: int) -> bool:
     """Mark a contradiction as resolved. Returns True on success."""
     db = _open()

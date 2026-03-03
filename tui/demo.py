@@ -314,6 +314,147 @@ def create_demo_db() -> str:
              (now - timedelta(hours=random.randint(0, 96))).isoformat())
         )
 
+    # --- Code Intelligence tables ---
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS code_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            language TEXT NOT NULL,
+            file_mtime REAL NOT NULL,
+            file_size INTEGER DEFAULT 0,
+            symbol_count INTEGER DEFAULT 0,
+            is_dirty INTEGER DEFAULT 0,
+            indexed_at TEXT NOT NULL,
+            UNIQUE(project, file_path)
+        );
+        CREATE TABLE IF NOT EXISTS code_symbols (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project TEXT NOT NULL,
+            file_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            qualified_name TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            line_start INTEGER NOT NULL,
+            line_end INTEGER NOT NULL,
+            parent_id INTEGER,
+            signature TEXT,
+            docstring TEXT,
+            exported INTEGER DEFAULT 0,
+            FOREIGN KEY (file_id) REFERENCES code_files(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS code_references (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project TEXT NOT NULL,
+            file_id INTEGER NOT NULL,
+            from_symbol_id INTEGER,
+            to_symbol_id INTEGER,
+            to_name TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            line INTEGER NOT NULL,
+            confidence REAL DEFAULT 0.5,
+            FOREIGN KEY (file_id) REFERENCES code_files(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_code_symbols_kind ON code_symbols(project, kind);
+    """)
+
+    indexed_at = now.isoformat()
+
+    # --- Demo code files (TypeScript SaaS + Python API) ---
+    demo_files = [
+        ("my-saas-app", "src/app/page.tsx", "typescript", 1024, 3),
+        ("my-saas-app", "src/lib/auth.ts", "typescript", 2048, 4),
+        ("my-saas-app", "src/lib/stripe.ts", "typescript", 1536, 3),
+        ("my-saas-app", "src/components/Dashboard.tsx", "typescript", 3072, 4),
+        ("api-backend", "app/main.py", "python", 890, 2),
+        ("api-backend", "app/routers/users.py", "python", 1420, 3),
+        ("api-backend", "app/models/user.py", "python", 960, 2),
+    ]
+
+    file_id_map = {}
+    for proj, fpath, lang, size, sym_count in demo_files:
+        db.execute(
+            "INSERT INTO code_files (project, file_path, language, file_mtime, file_size, symbol_count, indexed_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (proj, fpath, lang, 1709500000.0, size, sym_count, indexed_at)
+        )
+        fid = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        file_id_map[fpath] = fid
+
+    # --- Demo symbols (18 symbols) ---
+    demo_symbols = [
+        # src/app/page.tsx
+        ("my-saas-app", "src/app/page.tsx", "HomePage", "HomePage", "function", 1, 45, None, "(): JSX.Element", "Main landing page component", 1),
+        ("my-saas-app", "src/app/page.tsx", "HeroSection", "HeroSection", "function", 47, 82, None, "(): JSX.Element", "Hero section with CTA", 0),
+        ("my-saas-app", "src/app/page.tsx", "PricingCard", "PricingCard", "function", 84, 120, None, "(props: PricingProps): JSX.Element", "Pricing tier card component", 1),
+        # src/lib/auth.ts
+        ("my-saas-app", "src/lib/auth.ts", "AuthProvider", "AuthProvider", "class", 1, 85, None, None, "Authentication context provider", 1),
+        ("my-saas-app", "src/lib/auth.ts", "signIn", "AuthProvider.signIn", "method", 20, 42, None, "(email: string, password: string): Promise<User>", "Sign in with email/password", 0),
+        ("my-saas-app", "src/lib/auth.ts", "signOut", "AuthProvider.signOut", "method", 44, 58, None, "(): Promise<void>", "Sign out current user", 0),
+        ("my-saas-app", "src/lib/auth.ts", "UserRole", "UserRole", "enum", 87, 92, None, None, "User role enumeration", 1),
+        # src/lib/stripe.ts
+        ("my-saas-app", "src/lib/stripe.ts", "createCheckout", "createCheckout", "function", 5, 35, None, "(priceId: string, userId: string): Promise<Session>", "Create Stripe checkout session", 1),
+        ("my-saas-app", "src/lib/stripe.ts", "handleWebhook", "handleWebhook", "function", 37, 80, None, "(event: Stripe.Event): Promise<void>", "Process Stripe webhook events", 1),
+        ("my-saas-app", "src/lib/stripe.ts", "SubscriptionStatus", "SubscriptionStatus", "type_alias", 82, 82, None, "type SubscriptionStatus = 'active' | 'canceled' | 'past_due'", None, 1),
+        # src/components/Dashboard.tsx
+        ("my-saas-app", "src/components/Dashboard.tsx", "Dashboard", "Dashboard", "function", 1, 95, None, "(): JSX.Element", "Main dashboard component", 1),
+        ("my-saas-app", "src/components/Dashboard.tsx", "StatsPanel", "StatsPanel", "function", 97, 130, None, "(props: StatsPanelProps): JSX.Element", None, 0),
+        ("my-saas-app", "src/components/Dashboard.tsx", "DashboardProps", "DashboardProps", "interface", 132, 140, None, None, "Props for Dashboard component", 1),
+        ("my-saas-app", "src/components/Dashboard.tsx", "useDashboardData", "useDashboardData", "function", 142, 165, None, "(): DashboardData", "Custom hook for dashboard data fetching", 0),
+        # app/main.py
+        ("api-backend", "app/main.py", "create_app", "create_app", "function", 1, 25, None, "() -> FastAPI", "Factory function for FastAPI application", 1),
+        ("api-backend", "app/main.py", "health_check", "health_check", "function", 27, 32, None, "() -> dict", "Health check endpoint", 1),
+        # app/routers/users.py
+        ("api-backend", "app/routers/users.py", "get_users", "get_users", "function", 10, 28, None, "(db: Session, skip: int = 0, limit: int = 20) -> list[User]", "List users with pagination", 1),
+        ("api-backend", "app/routers/users.py", "get_user", "get_user", "function", 30, 42, None, "(user_id: int, db: Session) -> User", "Get single user by ID", 1),
+        ("api-backend", "app/routers/users.py", "UserCreate", "UserCreate", "class", 44, 52, None, None, "Pydantic model for user creation", 1),
+        # app/models/user.py
+        ("api-backend", "app/models/user.py", "User", "User", "class", 1, 25, None, None, "SQLAlchemy User model", 1),
+        ("api-backend", "app/models/user.py", "UserRole", "UserRole", "enum", 27, 32, None, None, "User role enumeration for backend", 1),
+    ]
+
+    symbol_id_map = {}
+    for proj, fpath, name, qname, kind, ls, le, parent, sig, doc, exported in demo_symbols:
+        fid = file_id_map[fpath]
+        db.execute(
+            "INSERT INTO code_symbols (project, file_id, name, qualified_name, kind, line_start, line_end, parent_id, signature, docstring, exported) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (proj, fid, name, qname, kind, ls, le, parent, sig, doc, exported)
+        )
+        sid = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        symbol_id_map[qname] = sid
+
+    # Set parent_id for methods
+    for qname in ["AuthProvider.signIn", "AuthProvider.signOut"]:
+        if qname in symbol_id_map and "AuthProvider" in symbol_id_map:
+            db.execute("UPDATE code_symbols SET parent_id = ? WHERE id = ?",
+                       (symbol_id_map["AuthProvider"], symbol_id_map[qname]))
+
+    # --- Demo references (10 references) ---
+    demo_refs = [
+        # Dashboard calls auth and stripe
+        ("my-saas-app", "src/components/Dashboard.tsx", "Dashboard", "AuthProvider", "call", 15, 0.9),
+        ("my-saas-app", "src/components/Dashboard.tsx", "Dashboard", "useDashboardData", "call", 8, 0.95),
+        ("my-saas-app", "src/components/Dashboard.tsx", "StatsPanel", "DashboardProps", "type_ref", 98, 0.8),
+        # HomePage uses components
+        ("my-saas-app", "src/app/page.tsx", "HomePage", "Dashboard", "call", 20, 0.9),
+        ("my-saas-app", "src/app/page.tsx", "HomePage", "PricingCard", "call", 30, 0.95),
+        ("my-saas-app", "src/app/page.tsx", "PricingCard", "createCheckout", "call", 95, 0.85),
+        # Auth imports
+        ("my-saas-app", "src/lib/auth.ts", "AuthProvider.signIn", "UserRole", "type_ref", 25, 0.8),
+        # Python backend
+        ("api-backend", "app/routers/users.py", "get_users", "User", "type_ref", 12, 0.9),
+        ("api-backend", "app/routers/users.py", "get_user", "User", "type_ref", 33, 0.9),
+        ("api-backend", "app/main.py", "create_app", "get_users", "import", 5, 0.85),
+    ]
+
+    for proj, fpath, from_qname, to_qname, kind, line, confidence in demo_refs:
+        fid = file_id_map.get(fpath, 1)
+        from_id = symbol_id_map.get(from_qname)
+        to_id = symbol_id_map.get(to_qname)
+        db.execute(
+            "INSERT INTO code_references (project, file_id, from_symbol_id, to_symbol_id, to_name, kind, line, confidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (proj, fid, from_id, to_id, to_qname, kind, line, confidence)
+        )
+
     db.commit()
     db.close()
     return db_path

@@ -16,6 +16,7 @@ from tui.screens.clusters import ClustersScreen
 from tui.screens.timeline import TimelineScreen
 from tui.screens.gaps import GapsScreen
 from tui.screens.contradictions import ContradictionsScreen
+from tui.screens.code_graph import CodeGraphScreen
 
 
 def _get_version() -> str:
@@ -42,6 +43,7 @@ class CogniLayerTUI(App):
         ("5", "tab_5", "Timeline"),
         ("6", "tab_6", "Gaps"),
         ("7", "tab_7", "Contradictions"),
+        ("8", "tab_8", "Code Graph"),
     ]
 
     def __init__(self, project: str | None = None, **kwargs):
@@ -66,6 +68,8 @@ class CogniLayerTUI(App):
                 yield GapsScreen(project=self.project)
             with TabPane("Contradictions", id="tab-contradictions"):
                 yield ContradictionsScreen(project=self.project)
+            with TabPane("Code Graph", id="tab-code-graph"):
+                yield CodeGraphScreen(project=self.project)
         yield Footer()
 
     def action_tab_1(self) -> None:
@@ -88,6 +92,9 @@ class CogniLayerTUI(App):
 
     def action_tab_7(self) -> None:
         self.query_one("#tabs", TabbedContent).active = "tab-contradictions"
+
+    def action_tab_8(self) -> None:
+        self.query_one("#tabs", TabbedContent).active = "tab-code-graph"
 
     def action_refresh(self) -> None:
         """Refresh by remounting the active tab content."""
