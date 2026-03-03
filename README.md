@@ -1,77 +1,156 @@
 # CogniLayer v3
 
-### One brain. Two agents. All your projects.
+### Your AI agent just got mass, context and a memory.
 
-Use Claude Code in the morning, switch to Codex CLI in the afternoon — **they share the same memory.** Debug a tricky auth issue with Claude, open Codex later — it already knows what happened. No re-explaining, no re-reading files. That's not just persistent memory, that's **agent interoperability**.
+Claude Code is powerful, but it starts every session blind — re-reads files, re-discovers architecture, re-learns your decisions. On a 50-file project that's 80-100K tokens burned before real work begins. **CogniLayer fixes that.**
 
-> **Shared memory between Claude Code & Codex CLI** | **Save ~80-100K tokens/session** | **Crash recovery** | **Cross-project intelligence**
+It's a local MCP server that gives your AI coding agent three things it doesn't have:
 
-CogniLayer gives your AI coding agents a **shared brain** — a local SQLite database with 13 MCP tools, hybrid search, and automatic session tracking. Every fact, decision, gotcha, and debugging session survives across sessions, agents, projects, and crashes.
+1. **Persistent knowledge** — facts, decisions, gotchas, error fixes survive across sessions and crashes
+2. **Code intelligence** — understands your codebase structure: who calls what, what breaks if you change something
+3. **Safety layer** — verifies deployment targets before you push to the wrong server
+
+> Works with **Claude Code** and **OpenAI Codex CLI** — same brain, two agents.
 
 [![Version](https://img.shields.io/badge/version-3.1.0-orange.svg)](#)
 [![License: Elastic-2.0](https://img.shields.io/badge/License-Elastic%202.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-green.svg)](https://www.python.org/)
-[![MCP Server](https://img.shields.io/badge/MCP-13%20tools-purple.svg)](https://modelcontextprotocol.io/)
+[![MCP Server](https://img.shields.io/badge/MCP-17%20tools-purple.svg)](https://modelcontextprotocol.io/)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-supported-blueviolet.svg)](#)
 [![Codex CLI](https://img.shields.io/badge/Codex%20CLI-supported-blueviolet.svg)](#)
 
 ---
 
-## Why You Need This
+## See the Difference
 
-### Switch agents without losing context
-Claude Code and Codex CLI share the same memory database. Start a task with one, finish with the other. **No other tool does this.**
-
-### Save 80-100K tokens per session
-Without CogniLayer, your agent re-reads the codebase from scratch every session. With it — a few KB of compact context injected via MCP. Pays for itself on day one.
-
-### Crash immunity
-Session killed? Terminal closed? Computer died? CogniLayer auto-recovers from the change log. Next session picks up where you left off — in either agent.
-
-### Cross-project intelligence
-Solved a CORS issue in project A three weeks ago? Search that knowledge from project B. Your experience compounds across all your projects.
-
-### Deployment safety
-Managing multiple servers? The Identity Card system blocks you from deploying to the wrong one. `verify_identity("deploy")` before every push to prod.
-
----
-
-## What It Does
-
-| Feature | What it means for you |
-|---------|----------------------|
-| **Shared Agent Memory** | Claude Code and Codex CLI read from the same brain — switch agents without losing context |
-| **Crash Recovery** | Session dies? Next one auto-recovers from the change log — in either agent |
-| **Cross-Project Search** | Working on app B? Search what you learned in app A |
-| **14 Structured Fact Types** | Not dumb notes — error fixes, API contracts, gotchas, procedures, decisions... |
-| **Session Bridges** | Each session starts with a summary of what happened last time |
-| **Staleness Detection** | Changed a file? CogniLayer warns when a remembered fact might be outdated |
-| **Hybrid Search** | Fulltext + AI vector search finds the right fact every time |
-| **Heat Decay** | Hot facts surface first, cold facts fade — like real memory |
-| **Deployment Safety** | Identity Card system blocks you from deploying to the wrong server |
-| **Knowledge Linking** | Zettelkasten-style connections between facts, cause/effect chains |
-| **Contradiction Detection** | Finds conflicting facts before they cause bugs |
-| **TUI Dashboard** | Visual memory browser with 7 tabs — see everything at a glance |
-| **Doc Indexing** | Your PRDs, READMEs, and configs chunked into searchable pieces |
-
----
-
-## How It Works (The Simple Version)
+### Without CogniLayer
 
 ```
-You start a Claude Code session
+You: "Fix the login bug"
+
+Claude: Let me read the project structure...
+        Let me read src/auth/login.ts...
+        Let me read src/auth/middleware.ts...
+        Let me read src/config/database.ts...
+        Let me understand your auth flow...
+        (8 files read, 45K tokens burned, 2 minutes spent on orientation)
+
+Claude: "Ok, I see the issue..."
+```
+
+### With CogniLayer
+
+```
+You: "Fix the login bug"
+
+Claude: [memory_search → "login auth flow"] → 3 facts loaded (200 tokens)
+        [code_context → "handleLogin"] → caller/callee map in 0.2s
+        Already knows: Express + Passport, JWT in httpOnly cookies,
+        last login bug was a race condition in session refresh (fixed 2 weeks ago)
+
+Claude: "This looks like the same pattern as the session refresh issue
+         from March 1st. The fix is..."
+```
+
+**That's not a small improvement. That's the difference between an agent that guesses and one that knows.**
+
+---
+
+## Real-World Examples
+
+### Debugging: "Why is checkout failing?"
+
+Without CogniLayer, Claude reads 15 files to understand your e-commerce flow. With it:
+
+```
+memory_search("checkout payment flow")
+→ fact: "Stripe webhook hits /api/webhooks/stripe, validates signature
+   with STRIPE_WEBHOOK_SECRET, then calls processOrder()"
+→ gotcha: "Stripe sends webhooks with 5s timeout — processOrder must
+   complete within 5s or webhook retries cause duplicate orders"
+→ error_fix: "Fixed duplicate orders on 2026-02-20 by adding
+   idempotency key check in processOrder()"
+
+code_impact("processOrder")
+→ depth 1: createOrderRecord, sendConfirmationEmail, updateInventory
+→ depth 2: InventoryService.reserve, EmailQueue.push
+→ "Changing processOrder will affect 6 functions across 4 files"
+```
+
+Claude already knows the architecture, the past bugs, **and** what will break if it touches the wrong thing. Instead of 15 file reads (~60K tokens), it uses **3 targeted queries (~800 tokens)**.
+
+### Refactoring: "Rename UserService to AccountService"
+
+```
+code_search("UserService")
+→ class UserService in src/services/user.ts (line 14)
+→ 12 references across 8 files
+
+code_impact("UserService")
+→ depth 1: AuthController, ProfileController, AdminPanel (WILL BREAK)
+→ depth 2: LoginRoute, RegisterRoute, middleware/auth (LIKELY AFFECTED)
+→ depth 3: 4 test files (NEED UPDATING)
+
+memory_search("UserService")
+→ decision: "UserService handles both auth and profile — planned split
+   into AuthService + ProfileService (decided 2026-02-15, not yet done)"
+```
+
+Claude doesn't just find-and-replace. It knows there's a **planned split** and can suggest doing both changes at once — saving you a future refactoring session.
+
+### New session after a crash: "What was I working on?"
+
+```
+[SessionStart hook fires automatically]
+→ bridge loaded: "Progress: Migrated 3/5 API endpoints to v2 format.
+   Done: /users, /products, /orders. Open: /payments, /shipping.
+   Blocker: /payments needs Stripe SDK v12 upgrade first."
+
+memory_search("stripe sdk upgrade")
+→ gotcha: "Stripe SDK v12 changed webhook signature verification —
+   verify() is now async, breaks all sync handlers"
+```
+
+Zero re-explanation. Claude picks up exactly where it left off, **including the blocker you hadn't mentioned yet**.
+
+---
+
+## Killer Features
+
+| Feature | What it means |
+|---------|--------------|
+| **Code Intelligence** | `code_context` shows who calls what. `code_impact` maps blast radius before you touch anything. Powered by tree-sitter AST parsing |
+| **Semantic Search** | Hybrid FTS5 + vector search finds the right fact even with different wording. Sub-millisecond response |
+| **17 MCP Tools** | Memory, code analysis, safety, project context — Claude uses them automatically, no commands needed |
+| **Token Savings** | 3 targeted queries (~800 tokens) replace 15 file reads (~60K tokens). Typical session saves 80-100K tokens |
+| **Crash Recovery** | Session dies? Next one auto-recovers from the change log. Works across both agents |
+| **Cross-Project Knowledge** | Solved a CORS issue in project A? Search it from project B. Your experience compounds |
+| **14 Fact Types** | Not dumb notes — error_fix, gotcha, api_contract, decision, pattern, procedure, and more |
+| **Heat Decay** | Hot facts surface first, cold facts fade. Each search hit boosts relevance |
+| **Safety Gates** | Identity Card system blocks deploy to wrong server. Audit trail on every safety change |
+| **Agent Interop** | Claude Code and Codex CLI share the same brain. Switch agents mid-task, zero context loss |
+| **Session Bridges** | Every session starts with a summary of what happened last time |
+| **TUI Dashboard** | Visual memory browser with 7 tabs — see everything at a glance |
+
+---
+
+## How It Works
+
+```
+You start a session
     ↓
-CogniLayer injects what it knows about your project
-(architecture, last session's progress, key decisions)
+SessionStart hook fires → injects project DNA, last session bridge, crash recovery
     ↓
-You work normally — Claude saves important things to memory automatically
+You work normally — Claude saves facts, decisions, gotchas automatically via MCP tools
+    ↓
+You ask about code → code_context / code_impact answer in milliseconds from AST index
     ↓
 Session ends (or crashes)
     ↓
 Next session starts with full context — no re-reading, no re-explaining
 ```
 
-**Zero effort after install.** No commands to learn, no workflow changes. CogniLayer runs in the background via hooks and an MCP server. Claude knows how to use it automatically.
+**Zero effort after install.** No commands to learn, no workflow changes. CogniLayer runs in the background via hooks and MCP tools. Claude knows how to use it automatically.
 
 ---
 
@@ -105,7 +184,7 @@ python install.py --both     # Claude Code + Codex CLI
 
 ```bash
 python ~/.cognilayer/mcp-server/server.py --test
-# → "OK: All 13 tools registered."
+# → "OK: All 17 tools registered."
 ```
 
 ### Troubleshooting
@@ -119,7 +198,7 @@ python diagnose.py --fix    # Check + auto-fix missing dependencies
 ### Requirements
 - Python 3.11+
 - Claude Code and/or Codex CLI
-- pip packages: `mcp`, `pyyaml`, `textual` (installed automatically), `fastembed`, `sqlite-vec` (optional)
+- pip packages: `mcp`, `pyyaml`, `textual` (installed automatically), `fastembed`, `sqlite-vec` (optional), `tree-sitter-language-pack` (optional, for code intelligence)
 
 ---
 
@@ -138,6 +217,7 @@ Once installed, use these in Claude Code:
 | `/identity` | Manage deployment Identity Card |
 | `/consolidate` | Organize memory — cluster, detect contradictions, assign tiers |
 | `/tui` | Launch the visual dashboard |
+| `/cognihelp` | Show all available commands |
 
 ---
 
@@ -227,6 +307,7 @@ search:
 
 - **Concurrent CLIs**: Running Claude Code and Codex CLI simultaneously on the same project may cause session tracking conflicts. Use one CLI at a time per project.
 - **Codex file tracking**: Codex CLI has no hooks, so automatic file change tracking is not available for Codex sessions.
+- **Code intelligence**: Requires `tree-sitter-language-pack` (~20MB). Without it, all other 13 tools work normally.
 - **TUI**: Requires `textual` package. Read-only except for resolving contradictions.
 
 ---
@@ -243,7 +324,7 @@ Claude Code / Codex CLI Session
     ├── SessionStart hook (Claude Code) / session_init tool (Codex)
     │   └── Injects Project DNA + last session bridge into CLAUDE.md
     │
-    ├── MCP Server (13 tools)
+    ├── MCP Server (17 tools)
     │   ├── memory_search    — Hybrid FTS5 + vector search with staleness detection
     │   ├── memory_write     — Store facts (14 types, deduplication, auto-embedding)
     │   ├── memory_delete    — Remove outdated facts by ID
@@ -256,10 +337,17 @@ Claude Code / Codex CLI Session
     │   ├── decision_log     — Query append-only decision history
     │   ├── verify_identity  — Safety gate before deploy/SSH/push
     │   ├── identity_set     — Configure project Identity Card
-    │   └── recommend_tech   — Suggest tech stacks from similar projects
+    │   ├── recommend_tech   — Suggest tech stacks from similar projects
+    │   ├── code_index       — Index codebase via tree-sitter AST parsing
+    │   ├── code_search      — Find symbols (functions, classes, methods) by name
+    │   ├── code_context     — 360° view: callers, callees, child methods
+    │   └── code_impact      — Blast radius analysis (BFS traversal of references)
     │
     ├── PostToolUse hook (Claude Code only)
     │   └── Logs every file Write/Edit to changes table (<1ms overhead)
+    │
+    ├── PreCompact hook (Claude Code only)
+    │   └── Saves comprehensive bridge before context compaction
     │
     └── SessionEnd hook / session_bridge(save)
         └── Closes session, builds emergency bridge if needed
@@ -273,7 +361,7 @@ Claude Code / Codex CLI Session
 ├── config.yaml            # Configuration (never overwritten by installer)
 ├── active_session.json    # Current session state (runtime)
 ├── mcp-server/
-│   ├── server.py          # MCP entry point (13 tools)
+│   ├── server.py          # MCP entry point (17 tools)
 │   ├── db.py              # Shared DB helper (WAL, busy_timeout, lazy vec loading)
 │   ├── i18n.py            # Translations (EN + CS)
 │   ├── init_db.py         # Schema creation + migration
@@ -281,11 +369,13 @@ Claude Code / Codex CLI Session
 │   ├── register_codex.py  # Codex CLI config.toml registration
 │   ├── indexer/           # File scanning and chunking
 │   ├── search/            # FTS5 + vector hybrid search
-│   └── tools/             # 13 MCP tool implementations
+│   ├── code/              # Code Intelligence (tree-sitter parsers, indexer, resolver)
+│   └── tools/             # 17 MCP tool implementations
 ├── hooks/
 │   ├── on_session_start.py    # Project detection, DNA injection, crash recovery
 │   ├── on_session_end.py      # Session close, emergency bridge, episode building
-│   ├── on_file_change.py      # PostToolUse file change logger
+│   ├── on_file_change.py      # PostToolUse file change logger + context monitoring
+│   ├── on_pre_compact.py      # PreCompact bridge preservation
 │   ├── generate_agents_md.py  # Codex AGENTS.md generator
 │   └── register.py            # Claude Code settings.json registration
 ├── tui/                       # TUI Dashboard (Textual)
@@ -318,6 +408,10 @@ Claude Code / Codex CLI Session
 | `fact_clusters` | Memory consolidation output clusters |
 | `contradictions` | Detected conflicting facts |
 | `causal_chains` | Cause → effect relationship tracking |
+| `retrieval_log` | Search quality tracking (queries, hit counts, latency) |
+| `code_files` | Indexed source files with hash-based change detection |
+| `code_symbols` | AST-parsed symbols (functions, classes, methods, interfaces) |
+| `code_references` | Symbol cross-references (calls, imports, inheritance) |
 | `facts_vec` / `chunks_vec` | Vector embeddings (sqlite-vec, optional) |
 
 ## Hybrid Search
@@ -342,6 +436,19 @@ Facts have a "temperature" that models relevance over time:
 
 Decay rates vary by fact type — `error_fix` and `gotcha` facts decay slower (they stay relevant longer) than `task` facts. Each search hit boosts a fact's heat score.
 
+## Code Intelligence
+
+Powered by [tree-sitter](https://tree-sitter.github.io/) AST parsing with language-pack support for 10+ languages:
+
+| Tool | What it does |
+|------|-------------|
+| `code_index` | Scans project files, parses AST, extracts symbols and references into SQLite. Incremental — only re-indexes changed files |
+| `code_search` | FTS5 search over symbol names. Find any function, class, or method by name or partial match |
+| `code_context` | 360° view of a symbol: definition, who calls it (incoming), what it calls (outgoing), child methods |
+| `code_impact` | Blast radius analysis — BFS traversal of incoming references. Shows what breaks at depth 1/2/3 |
+
+Indexing runs with a configurable time budget (default 30s). Partial results are usable immediately. Unresolved references are re-resolved on the next incremental run.
+
 ## Codex CLI Integration
 
 Codex CLI has no hook system, so CogniLayer adapts:
@@ -349,7 +456,7 @@ Codex CLI has no hook system, so CogniLayer adapts:
 | Aspect | Claude Code | Codex CLI |
 |--------|------------|-----------|
 | Config | `~/.claude/settings.json` | `~/.codex/config.toml` |
-| Hooks | SessionStart/End/PostToolUse | None — uses MCP tools + AGENTS.md instructions |
+| Hooks | SessionStart/End/PreCompact/PostToolUse | None — uses MCP tools + AGENTS.md instructions |
 | Instructions | `CLAUDE.md` | `AGENTS.md` (generated by `generate_agents_md.py`) |
 | Session init | Automatic via hook | `session_init` MCP tool called per AGENTS.md instructions |
 | File tracking | Automatic via PostToolUse | Not available (acceptable limitation) |
