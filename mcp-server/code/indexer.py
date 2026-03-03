@@ -266,12 +266,13 @@ def reindex_dirty(db: sqlite3.Connection, project: str, project_path: str,
             continue
 
         try:
+            _stat = abs_path.stat()
             finfo = {
                 "path": str(abs_path),
                 "rel_path": file_path,
                 "extension": ext,
-                "mtime": abs_path.stat().st_mtime,
-                "size": abs_path.stat().st_size,
+                "mtime": _stat.st_mtime,
+                "size": _stat.st_size,
             }
             # Delete old data and re-store
             _delete_file_data(db, file_id)
@@ -343,13 +344,13 @@ def _store_file(db: sqlite3.Connection, project: str, finfo: dict,
             WHERE id = ?
         """, (language, finfo["mtime"], finfo["size"], symbol_count, now, file_id))
     else:
-        _db_execute_with_retry(db, """
+        cursor = _db_execute_with_retry(db, """
             INSERT INTO code_files (project, file_path, language, file_mtime,
                                     file_size, symbol_count, is_dirty, indexed_at)
             VALUES (?, ?, ?, ?, ?, ?, 0, ?)
         """, (project, finfo["rel_path"], language, finfo["mtime"],
               finfo["size"], symbol_count, now))
-        file_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        file_id = cursor.lastrowid
 
     return file_id
 
@@ -373,14 +374,14 @@ def _store_symbols(db: sqlite3.Connection, project: str, file_id: int,
     id_map: dict[str, int] = {}  # qualified_name → DB id
 
     for sym in symbols:
-        _db_execute_with_retry(db, """
+        cursor = _db_execute_with_retry(db, """
             INSERT INTO code_symbols (project, file_id, name, qualified_name, kind,
                                       line_start, line_end, signature, docstring, exported)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (project, file_id, sym.name, sym.qualified_name, sym.kind,
               sym.line_start, sym.line_end, sym.signature, sym.docstring,
               1 if sym.exported else 0))
-        sym_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        sym_id = cursor.lastrowid
         id_map[sym.qualified_name] = sym_id
 
     # Second pass: set parent_id
@@ -398,7 +399,7 @@ def _store_references(db: sqlite3.Connection, project: str, file_id: int,
                       references: list) -> None:
     """Store references in DB."""
     for ref in references:
-        _db_execute_with_retry(db, """
+        cursor = _db_execute_with_retry(db, """
             INSERT INTO code_references (project, file_id, from_symbol_id,
                                          to_name, kind, line, confidence)
             VALUES (?, ?, NULL, ?, ?, ?, ?)
@@ -411,7 +412,7 @@ def _store_references(db: sqlite3.Connection, project: str, file_id: int,
                 WHERE project = ? AND qualified_name = ? AND file_id = ?
             """, (project, ref.from_symbol, file_id)).fetchone()
             if from_sym:
-                ref_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+                ref_id = cursor.lastrowid
                 db.execute("""
                     UPDATE code_references SET from_symbol_id = ? WHERE id = ?
                 """, (from_sym["id"], ref_id))

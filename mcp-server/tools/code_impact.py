@@ -34,6 +34,10 @@ def code_impact(symbol: str, max_depth: int = 3,
         db = open_db()
 
         if not _has_index(db, project):
+            try:
+                import tree_sitter_language_pack  # noqa: F401
+            except ImportError:
+                return t("code.no_treesitter")
             return t("code.not_indexed", project=project)
 
         # Reindex dirty

@@ -542,7 +542,8 @@ def upgrade_schema(db):
             file_id INTEGER NOT NULL,
             name TEXT NOT NULL,
             qualified_name TEXT NOT NULL,
-            kind TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK(kind IN
+                ('function','class','method','interface','variable','type_alias','enum','module')),
             line_start INTEGER NOT NULL,
             line_end INTEGER NOT NULL,
             parent_id INTEGER,
@@ -560,7 +561,8 @@ def upgrade_schema(db):
             from_symbol_id INTEGER,
             to_symbol_id INTEGER,
             to_name TEXT NOT NULL,
-            kind TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK(kind IN
+                ('call','import','inherit','implement','type_ref','decorator')),
             line INTEGER NOT NULL,
             confidence REAL DEFAULT 0.5,
             FOREIGN KEY (project) REFERENCES projects(name),

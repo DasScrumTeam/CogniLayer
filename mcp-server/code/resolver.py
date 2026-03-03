@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import time
 
 _log = logging.getLogger("cognilayer.code.resolver")
 
 
-def resolve_references(db: sqlite3.Connection, project: str) -> int:
+def resolve_references(db: sqlite3.Connection, project: str,
+                       time_budget: float = 10.0) -> int:
     """Resolve unlinked references to symbols.
 
     Matches code_references.to_name against code_symbols.name or qualified_name.
@@ -45,7 +47,14 @@ def resolve_references(db: sqlite3.Connection, project: str) -> int:
         by_name.setdefault(name, []).append(s)
         by_qname[qname] = s
 
+    start = time.monotonic()
+
     for ref in unresolved:
+        if time.monotonic() - start > time_budget:
+            _log.info("Resolver time budget exhausted (%ss), resolved %d/%d",
+                      time_budget, resolved, len(unresolved))
+            break
+
         ref_dict = dict(ref)
         to_name = ref_dict["to_name"]
         ref_kind = ref_dict["kind"]

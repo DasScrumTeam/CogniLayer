@@ -237,6 +237,8 @@ class PythonParser(BaseParser):
             return
 
         name = self._node_text(left, source)
+        if not name:
+            return
         # Only track ALL_CAPS constants or type aliases
         if not name.isupper() and not name[0].isupper():
             return

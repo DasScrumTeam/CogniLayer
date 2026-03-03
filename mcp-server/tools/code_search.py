@@ -140,7 +140,11 @@ def _has_index(db, project):
 
 
 def _auto_index_hint(project, path):
-    """Return hint to run code_index first."""
+    """Return hint to run code_index first, or tree-sitter install hint."""
+    try:
+        import tree_sitter_language_pack  # noqa: F401
+    except ImportError:
+        return t("code.no_treesitter")
     return t("code.not_indexed", project=project)
 
 

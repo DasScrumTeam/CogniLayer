@@ -73,6 +73,7 @@ def main():
         rel_path = file_path.replace("\\", "/")
 
     # Insert into DB (one INSERT + COMMIT = <1ms)
+    db = None
     try:
         db = sqlite3.connect(str(DB_PATH))
         db.execute("PRAGMA busy_timeout=2000")
@@ -95,10 +96,11 @@ def main():
     except Exception:
         pass
     finally:
-        try:
-            db.close()
-        except Exception:
-            pass
+        if db:
+            try:
+                db.close()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
