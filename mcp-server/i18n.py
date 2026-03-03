@@ -43,6 +43,7 @@ _EN: dict[str, str] = {
         "Fact type: decision|fact|pattern|issue|task|skill|gotcha|"
         "procedure|error_fix|command|performance|api_contract|dependency|client_rule"
     ),
+    "tool.memory_search.param.tags": "Filter by tags (e.g. 'subagent' or 'subagent,auth-review'). All specified tags must match.",
     "tool.memory_search.param.limit": "Max results (default 5, max 10)",
 
     "tool.memory_write.desc": (
@@ -126,6 +127,7 @@ _EN: dict[str, str] = {
     "memory_write.exists_unchanged": "Fact already exists (unchanged): {preview}...",
     "memory_write.updated": "Updated in memory: {preview}... [project: {project}, type: {type}]",
     "memory_write.saved": "Saved to memory: {preview}... [project: {project}, type: {type}]",
+    "memory_write.failed_locked": "FAILED to save — database locked/busy, data was NOT persisted: {preview}... Include this content in your return text as fallback.",
     "memory_write.blocked_secret": (
         "BLOCKED — Content appears to contain a secret ({secret_type}). "
         "Secrets must NEVER be saved to memory. Remove the sensitive data and try again."
@@ -308,6 +310,22 @@ _EN: dict[str, str] = {
         "  (error_fix, gotcha, pattern, api_contract, procedure, decision)\n"
         '- session_bridge(action="save", content="Progress: ...; Open: ...")\n'
         "DO NOT wait for /harvest — session may crash.\n"
+        "\n"
+        "SUBAGENT MEMORY PROTOCOL:\n"
+        "When spawning Agent tool for research or exploration:\n"
+        "- Include in prompt: synthesize findings into consolidated memory_write(content, type, tags=\"subagent,<task-topic>\") facts\n"
+        "  Assign a descriptive topic tag per subagent (e.g. tags=\"subagent,auth-review\", tags=\"subagent,perf-analysis\")\n"
+        "- Do NOT write each discovery separately — group related findings into cohesive facts\n"
+        "- Write to memory as the LAST step before return, not incrementally — saves turns and tokens\n"
+        "- Each fact must be self-contained with specific details (file paths, values, code snippets)\n"
+        "- When findings relate to specific files, include domain and source_file for better search and staleness detection\n"
+        "- End each fact with 'Search: keyword1, keyword2' — keywords INSIDE the fact survive context compaction\n"
+        "- Record significant negative findings too (e.g. 'no rate limiting exists in src/api/' — prevents repeat searches)\n"
+        "- Return: actionable summary (file paths, function names, specific values) + what was saved + keywords for memory_search\n"
+        "- If MCP tools unavailable or fail → include key findings directly in return text as fallback\n"
+        "- Launch subagents as foreground (default) for reliable MCP access — user can Ctrl+B to background later\n"
+        "Why: without this protocol, subagent returns dump all text into parent context (40K+ tokens).\n"
+        "With protocol, findings go to DB and parent gets ~500 token summary + on-demand memory_search.\n"
         "\n"
         "BEFORE DEPLOY/PUSH:\n"
         '- verify_identity(action_type="...") → mandatory safety gate\n'
@@ -544,6 +562,7 @@ _CS: dict[str, str] = {
         "Typ faktu: decision|fact|pattern|issue|task|skill|gotcha|"
         "procedure|error_fix|command|performance|api_contract|dependency|client_rule"
     ),
+    "tool.memory_search.param.tags": "Filtr podle tagu (napr. 'subagent' nebo 'subagent,auth-review'). Vsechny zadane tagy musi odpovidat.",
     "tool.memory_search.param.limit": "Max pocet vysledku (default 5, max 10)",
 
     "tool.memory_write.desc": (
@@ -627,6 +646,7 @@ _CS: dict[str, str] = {
     "memory_write.exists_unchanged": "Fakt uz existuje (beze zmeny): {preview}...",
     "memory_write.updated": "Aktualizovano v pameti: {preview}... [projekt: {project}, typ: {type}]",
     "memory_write.saved": "Ulozeno do pameti: {preview}... [projekt: {project}, typ: {type}]",
+    "memory_write.failed_locked": "NEULOŽENO — databaze zamcena/busy, data NEBYLA ulozena: {preview}... Zahrn tento obsah do navratoveho textu jako fallback.",
     "memory_write.blocked_secret": (
         "BLOKOVANO — Obsah zrejme obsahuje secret ({secret_type}). "
         "Secrets se NESMI ukladat do pameti. Odstraň citliva data a zkus znovu."
@@ -809,6 +829,22 @@ _CS: dict[str, str] = {
         "  (error_fix, gotcha, pattern, api_contract, procedure, decision)\n"
         '- session_bridge(action="save", content="Progress: ...; Open: ...")\n'
         "NECEKEJ na /harvest — session muze crashnout.\n"
+        "\n"
+        "PROTOKOL PAMETI PRO SUBAGENTY:\n"
+        "Pri spousteni Agent nastroje pro pruzkum nebo analyzu:\n"
+        "- Zadat v promptu: syntetizovat nalezy do konsolidovanych memory_write(content, type, tags=\"subagent,<tema-ukolu>\") faktu\n"
+        "  Priradit popisny tag kazemu subagentovi (napr. tags=\"subagent,auth-review\", tags=\"subagent,perf-analysis\")\n"
+        "- NEPSAT kazdy objev zvlast — seskupit souvisejici nalezy do ucelenych faktu\n"
+        "- Zapisovat do pameti az jako POSLEDNI krok pred return, ne prubezne — setri turns a tokeny\n"
+        "- Kazdy fakt musi byt samostatny se specifickymi detaily (cesty k souborum, hodnoty, kod)\n"
+        "- Kdyz se nalezy tykaji konkretniho souboru, pridat domain a source_file pro lepsi vyhledavani a detekci zastaralosti\n"
+        "- Ukoncit kazdy fakt radkem 'Search: klicove1, klicove2' — keywords UVNITR faktu preziji context compaction\n"
+        "- Zaznamenat i vyznamne negativni nalezy (napr. 'rate limiting v src/api/ neexistuje' — zabrani opakovani hledani)\n"
+        "- Vratit: akcni shrnuti (cesty k souborum, nazvy funkci, konkretni hodnoty) + co bylo ulozeno + klicova slova pro memory_search\n"
+        "- Pokud MCP nastroje nejsou dostupne nebo selzou → vratit klicove poznatky primo v textu jako fallback\n"
+        "- Spoustet subagenty jako foreground (default) pro spolehlive MCP — uzivatel muze Ctrl+B presunout na pozadi pozdeji\n"
+        "Proc: bez protokolu subagent vraci vsechna data do parent kontextu (40K+ tokenu).\n"
+        "S protokolem nalezy jdou do DB a parent dostane ~500 tokenu shrnuti + on-demand memory_search.\n"
         "\n"
         "PRED DEPLOY/PUSH:\n"
         '- verify_identity(action_type="...") → povinna safety brana\n'

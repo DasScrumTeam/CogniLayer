@@ -278,13 +278,12 @@ def memory_write(content: str, type: str = "fact", tags: str = None,
 
         db.commit()
     except sqlite3.OperationalError as e:
-        # Rollback on lock timeout — don't lose data silently
         try:
             db.rollback()
         except Exception:
             pass
         if "locked" in str(e) or "busy" in str(e):
-            return t("memory_write.saved", preview=content[:60], project=project, type=type) + " (warning: DB busy, retried)"
+            return t("memory_write.failed_locked", preview=content[:60])
         raise
     finally:
         db.close()

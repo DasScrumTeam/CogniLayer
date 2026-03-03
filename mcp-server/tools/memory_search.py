@@ -244,7 +244,7 @@ def _get_causal_chains(db, results: list) -> dict:
 
 
 def memory_search(query: str, scope: str = "project",
-                  type: str = None, limit: int = 5) -> str:
+                  type: str = None, tags: str = None, limit: int = 5) -> str:
     """Search CogniLayer memory using hybrid FTS5 + vector search."""
     import time as _t
     import logging
@@ -285,7 +285,7 @@ def memory_search(query: str, scope: str = "project",
         _trace("START fts_search_facts")
         results = fts_search_facts(
             db, query, project=project, fact_type=type,
-            limit=limit, scope=scope
+            tags=tags, limit=limit, scope=scope
         )
         _trace(f"fts_search DONE: {len(results)} results")
 

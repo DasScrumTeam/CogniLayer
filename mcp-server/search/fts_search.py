@@ -89,7 +89,8 @@ def _chunk_row_to_dict(row) -> dict:
 
 def _vec_search_facts(db: sqlite3.Connection, query_embedding: bytes,
                       project: str = None, fact_type: str = None,
-                      scope: str = "project", limit: int = 20) -> dict[int, float]:
+                      scope: str = "project", limit: int = 20,
+                      tags: str = None) -> dict[int, float]:
     """Vector similarity search on facts. Returns {rowid: distance}."""
     rows = db.execute("""
         SELECT rowid, distance
@@ -100,7 +101,7 @@ def _vec_search_facts(db: sqlite3.Connection, query_embedding: bytes,
     results = {}
     for row in rows:
         rowid, distance = row[0], row[1]
-        fact = db.execute("SELECT project, type FROM facts WHERE rowid = ?", (rowid,)).fetchone()
+        fact = db.execute("SELECT project, type, tags FROM facts WHERE rowid = ?", (rowid,)).fetchone()
         if not fact:
             continue
         if scope == "project" and project and fact["project"] != project:
@@ -108,6 +109,12 @@ def _vec_search_facts(db: sqlite3.Connection, query_embedding: bytes,
         if scope != "all" and scope != "project" and fact["project"] != scope:
             continue
         if fact_type and fact["type"] != fact_type:
+            continue
+        if tags and fact["tags"]:
+            fact_tags_str = fact["tags"]
+            if not all(t.strip() in fact_tags_str for t in tags.split(",")):
+                continue
+        elif tags and not fact["tags"]:
             continue
         results[rowid] = distance
 
@@ -186,7 +193,7 @@ _FACTS_COLUMNS = "id, project, content, type, domain, tags, timestamp, heat_scor
 
 
 def fts_search_facts(db: sqlite3.Connection, query: str, project: str = None,
-                     fact_type: str = None, limit: int = 5,
+                     fact_type: str = None, tags: str = None, limit: int = 5,
                      scope: str = "project") -> list[dict]:
     """Search facts using FTS5 + optional vector hybrid search."""
     import logging, time as _t
@@ -218,6 +225,13 @@ def fts_search_facts(db: sqlite3.Connection, query: str, project: str = None,
     if fact_type:
         conditions.append("type = ?")
         params.append(fact_type)
+
+    if tags:
+        for tag in tags.split(","):
+            tag = tag.strip()
+            if tag:
+                conditions.append("tags LIKE ?")
+                params.append(f"%{tag}%")
 
     # Wildcard/trivial query — return hottest/newest facts without FTS5
     if _is_trivial_query(query):
@@ -285,7 +299,7 @@ def fts_search_facts(db: sqlite3.Connection, query: str, project: str = None,
                 _tr("embed_text TIMEOUT (10s), falling back to FTS5 only")
                 return fts_results[:limit]
             _tr("embed_text done")
-            vec_distances = _vec_search_facts(db, query_embedding, project, fact_type, scope, limit)
+            vec_distances = _vec_search_facts(db, query_embedding, project, fact_type, scope, limit, tags=tags)
             if vec_distances:
                 fts_rowids = {r["rowid"] for r in fts_results}
                 for rowid in vec_distances:

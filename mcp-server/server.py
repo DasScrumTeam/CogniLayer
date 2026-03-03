@@ -70,6 +70,10 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": t("tool.memory_search.param.type")
                     },
+                    "tags": {
+                        "type": "string",
+                        "description": t("tool.memory_search.param.tags")
+                    },
                     "limit": {
                         "type": "integer",
                         "description": t("tool.memory_search.param.limit"),
@@ -414,6 +418,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 query=arguments["query"],
                 scope=arguments.get("scope", "project"),
                 type=arguments.get("type"),
+                tags=arguments.get("tags"),
                 limit=arguments.get("limit", 5)
             )
         elif name == "memory_write":
