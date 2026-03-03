@@ -6,8 +6,10 @@ Uses BAAI/bge-small-en-v1.5 (384 dimensions, ~50MB, CPU-only via ONNX).
 
 import struct
 import os
+import time as _time
 from pathlib import Path
 from typing import Optional
+from datetime import datetime as _dt
 
 # Suppress symlink warning on Windows
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
@@ -17,24 +19,44 @@ EMBEDDING_DIM = 384
 CACHE_DIR = str(Path.home() / ".cognilayer" / "cache" / "embeddings")
 
 _model = None
+_TRACE_FILE = Path.home() / ".cognilayer" / "logs" / "trace.log"
+
+
+def _trace(msg):
+    """Unbuffered trace logging for debugging hangs."""
+    try:
+        with open(_TRACE_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{_dt.now().isoformat()} [embedder] {msg}\n")
+    except Exception:
+        pass
 
 
 def _get_model():
     """Lazy-load the embedding model (singleton)."""
     global _model
-    if _model is None:
-        from fastembed import TextEmbedding
-        _model = TextEmbedding(EMBEDDING_MODEL, cache_dir=CACHE_DIR)
+    if _model is not None:
+        return _model
+    _trace("_get_model: loading (first call)")
+    t0 = _time.time()
+    _trace("_get_model: importing fastembed.TextEmbedding...")
+    from fastembed import TextEmbedding
+    _trace(f"_get_model: import done in {_time.time()-t0:.2f}s, creating model...")
+    _model = TextEmbedding(EMBEDDING_MODEL, cache_dir=CACHE_DIR)
+    _trace(f"_get_model: model created in {_time.time()-t0:.2f}s total")
     return _model
 
 
 def embed_text(text: str) -> bytes:
     """Generate embedding for a single text string. Returns raw bytes for sqlite-vec."""
+    t0 = _time.time()
+    _trace(f"embed_text: start (text={text[:30]!r})")
     model = _get_model()
+    _trace(f"embed_text: model ready in {_time.time()-t0:.3f}s, embedding...")
     embeddings = list(model.embed([text]))
     vector = embeddings[0]
-    # Pack as float32 array (little-endian) for sqlite-vec
-    return struct.pack(f"<{EMBEDDING_DIM}f", *vector)
+    result = struct.pack(f"<{EMBEDDING_DIM}f", *vector)
+    _trace(f"embed_text: done in {_time.time()-t0:.3f}s")
+    return result
 
 
 def embed_texts(texts: list[str]) -> list[bytes]:

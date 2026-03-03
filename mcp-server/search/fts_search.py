@@ -178,6 +178,22 @@ def fts_search_facts(db: sqlite3.Connection, query: str, project: str = None,
                      fact_type: str = None, limit: int = 5,
                      scope: str = "project") -> list[dict]:
     """Search facts using FTS5 + optional vector hybrid search."""
+    import logging, time as _t
+    from pathlib import Path as _Path
+    from datetime import datetime as _dt
+    _log = logging.getLogger("cognilayer.fts_search")
+    _t0 = _t.time()
+    _tf = _Path(__file__).parent.parent.parent / "logs" / "trace.log"
+    def _tr(step):
+        msg = f"[{_t.time() - _t0:.3f}s] fts_search: {step}"
+        _log.info("TRACE %s", msg)
+        try:
+            with open(_tf, "a", encoding="utf-8") as f:
+                f.write(f"{_dt.now().isoformat()} {msg}\n")
+        except Exception:
+            pass
+
+    _tr(f"START query='{query[:30]}' project={project}")
     conditions = []
     params = []
 
@@ -209,9 +225,12 @@ def fts_search_facts(db: sqlite3.Connection, query: str, project: str = None,
     fts_query = _escape_fts5(query)
     fts_where = f"AND {' AND '.join(['f.' + c for c in conditions])}" if conditions else ""
 
+    _tr("START ensure_vec")
     vec_ready = ensure_vec(db) and _vec_tables_exist(db)
+    _tr(f"ensure_vec done, vec_ready={vec_ready}")
     fetch_limit = limit * 3 if vec_ready else limit
 
+    _tr("START FTS5 query")
     sql = f"""
         SELECT f.{_FACTS_COLUMNS.replace(', ', ', f.')}
         FROM facts f
@@ -224,6 +243,7 @@ def fts_search_facts(db: sqlite3.Connection, query: str, project: str = None,
 
     try:
         rows = db.execute(sql, fts_params).fetchall()
+        _tr(f"FTS5 query done, {len(rows)} rows")
     except sqlite3.OperationalError:
         # Fallback: LIKE search if FTS5 query syntax fails
         where_parts = list(conditions) + ["content LIKE ?"]
@@ -241,13 +261,24 @@ def fts_search_facts(db: sqlite3.Connection, query: str, project: str = None,
     fts_results = [_fact_row_to_dict(row) for row in rows]
 
     # Hybrid search: combine with vector results if available
+    # Note: embed model is pre-loaded at MCP server startup (before stdio pipes)
     if vec_ready:
+        _tr("START hybrid/vector search (vec_ready=True)")
         try:
             from embedder import embed_text
-            query_embedding = embed_text(query)
+            import concurrent.futures
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(embed_text, query)
+            try:
+                query_embedding = future.result(timeout=10)
+            except concurrent.futures.TimeoutError:
+                executor.shutdown(wait=False, cancel_futures=True)
+                _tr("embed_text TIMEOUT (10s), falling back to FTS5 only")
+                return fts_results[:limit]
+            executor.shutdown(wait=False)
+            _tr("embed_text done")
             vec_distances = _vec_search_facts(db, query_embedding, project, fact_type, scope, limit)
             if vec_distances:
-                # Fetch vec-only results not already in FTS results
                 fts_rowids = {r["rowid"] for r in fts_results}
                 for rowid in vec_distances:
                     if rowid not in fts_rowids:
@@ -257,7 +288,9 @@ def fts_search_facts(db: sqlite3.Connection, query: str, project: str = None,
                         if row:
                             fts_results.append(_fact_row_to_dict(row))
                 fts_results = _hybrid_rank(fts_results, vec_distances)
+            _tr(f"hybrid search done, {len(fts_results)} total results")
         except Exception as e:
+            _tr(f"vector search failed: {e}")
             import sys
             print(f"[CogniLayer] Vector search failed, using FTS5 only: {e}", file=sys.stderr)
 
@@ -335,10 +368,17 @@ def fts_search_chunks(db: sqlite3.Connection, query: str, project: str = None,
     if vec_ready:
         try:
             from embedder import embed_text
-            query_embedding = embed_text(query)
+            import concurrent.futures
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(embed_text, query)
+            try:
+                query_embedding = future.result(timeout=10)
+            except concurrent.futures.TimeoutError:
+                executor.shutdown(wait=False, cancel_futures=True)
+                return fts_results[:limit]
+            executor.shutdown(wait=False)
             vec_distances = _vec_search_chunks(db, query_embedding, project, file_filter, limit)
             if vec_distances:
-                # Fetch vec-only results
                 fts_rowids = {r["rowid"] for r in fts_results}
                 for rowid in vec_distances:
                     if rowid not in fts_rowids:

@@ -1,6 +1,12 @@
-"""project_context — Return Project DNA and current context."""
+"""project_context — Return Project DNA and current context.
 
+Includes lazy crash recovery and auto-identity detection
+(moved from session_start for faster startup).
+"""
+
+import json
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -8,17 +14,198 @@ from db import open_db
 from utils import get_active_session
 from i18n import t
 
+COGNILAYER_HOME = Path.home() / ".cognilayer"
+SESSIONS_DIR = COGNILAYER_HOME / "sessions"
+
+
+def _build_emergency_bridge(db, session_id: str) -> str:
+    """Build emergency bridge from changes and facts of a crashed session."""
+    changed_files = db.execute("""
+        SELECT DISTINCT file_path, action FROM changes
+        WHERE session_id = ? ORDER BY timestamp
+    """, (session_id,)).fetchall()
+
+    facts = db.execute("""
+        SELECT type, substr(content, 1, 80) FROM facts
+        WHERE session_id = ? ORDER BY timestamp
+    """, (session_id,)).fetchall()
+
+    lines = [t("session_end.emergency_header")]
+
+    if changed_files:
+        file_list = ", ".join(f"{f[0]} ({f[1]})" for f in changed_files[:10])
+        lines.append(f"Files: {file_list}")
+        if len(changed_files) > 10:
+            lines.append(t("session_end.and_more", count=len(changed_files) - 10))
+
+    if facts:
+        facts_summary = "; ".join(f"[{f[0]}] {f[1]}" for f in facts[:5])
+        lines.append(f"Facts: {facts_summary}")
+
+    if not changed_files and not facts:
+        lines.append(t("session_end.no_changes"))
+
+    return "\n".join(lines)
+
+
+def _check_crash_recovery(db, project: str) -> str | None:
+    """Detect and recover orphaned sessions (lazy — runs on first context request)."""
+    cutoff = (datetime.now() - timedelta(seconds=120)).isoformat()
+    orphans = db.execute("""
+        SELECT s.id, s.start_time, s.bridge_content, s.claude_session_id,
+               (SELECT COUNT(*) FROM changes WHERE session_id = s.id) as change_count,
+               (SELECT GROUP_CONCAT(file_path, ', ')
+                FROM (SELECT DISTINCT file_path FROM changes
+                      WHERE session_id = s.id
+                      ORDER BY timestamp DESC LIMIT 5)) as last_files
+        FROM sessions s
+        WHERE project = ? AND end_time IS NULL AND start_time < ?
+        ORDER BY start_time DESC
+    """, (project, cutoff)).fetchall()
+
+    crash_info = None
+    for orphan in orphans:
+        session_id, start_time, bridge_content, claude_sid, changes, last_files = (
+            orphan[0], orphan[1], orphan[2], orphan[3], orphan[4], orphan[5]
+        )
+        # Check if session is still alive via per-session file
+        if claude_sid:
+            session_file = SESSIONS_DIR / f"{claude_sid}.json"
+            if session_file.exists():
+                continue  # Session still alive, skip
+
+        # Build emergency bridge if the crashed session has none
+        if not bridge_content:
+            bridge_content = _build_emergency_bridge(db, session_id)
+            db.execute("UPDATE sessions SET bridge_content = ? WHERE id = ?",
+                       (bridge_content, session_id))
+        # Close the orphan session
+        db.execute("""
+            UPDATE sessions SET end_time = start_time,
+                summary = ?
+            WHERE id = ?
+        """, (t("crash.session_summary"), session_id))
+        # Report the most recent crash only
+        if crash_info is None:
+            crash_info = t("crash.recovery",
+                           start_time=start_time,
+                           changes=changes,
+                           last_files=last_files or t("crash.no_files"))
+
+    if crash_info:
+        db.commit()
+    return crash_info
+
+
+def _auto_detect_identity(db, project: str, project_path: Path):
+    """Auto-detect tech stack from project files (lazy — runs once per project)."""
+    existing = db.execute("SELECT project FROM project_identity WHERE project = ?", (project,)).fetchone()
+    if existing:
+        return  # Already has identity card
+
+    card = {}
+    now = datetime.now().isoformat()
+
+    # package.json detection
+    pkg = project_path / "package.json"
+    if pkg.exists():
+        try:
+            data = json.loads(pkg.read_text(encoding="utf-8"))
+            deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
+            if "next" in deps:
+                ver = deps["next"].lstrip("^~").split(".")[0]
+                card["framework"] = f"nextjs-{ver}"
+                card["language"] = "typescript" if "typescript" in deps else "javascript"
+            if "tailwindcss" in deps:
+                ver = deps["tailwindcss"].lstrip("^~").split(".")[0]
+                card["css_approach"] = f"tailwind-v{ver}"
+            if "better-sqlite3" in deps:
+                card["db_technology"] = "better-sqlite3"
+                card["db_type"] = "sqlite"
+            elif "@prisma/client" in deps:
+                card["db_technology"] = "prisma"
+            card["package_manager"] = (
+                "bun" if (project_path / "bun.lockb").exists()
+                else "pnpm" if (project_path / "pnpm-lock.yaml").exists()
+                else "npm"
+            )
+        except Exception:
+            pass
+
+    # PHP detection
+    if list(project_path.glob("*.php"))[:1] and "framework" not in card:
+        card["framework"] = "php"
+        card["language"] = "php"
+
+    # Python detection
+    if (project_path / "pyproject.toml").exists() and "framework" not in card:
+        card["language"] = "python"
+        try:
+            content = (project_path / "pyproject.toml").read_text(encoding="utf-8")
+            if "fastapi" in content.lower():
+                card["framework"] = "fastapi"
+            elif "django" in content.lower():
+                card["framework"] = "django"
+        except Exception:
+            pass
+
+    # Docker detection
+    if (project_path / "docker-compose.yml").exists() or (project_path / "docker-compose.yaml").exists():
+        card["containerization"] = "docker-compose"
+        card["hosting_pattern"] = "docker"
+
+    # Git remote detection
+    git_config = project_path / ".git" / "config"
+    if git_config.exists():
+        try:
+            for line in git_config.read_text(encoding="utf-8").splitlines():
+                if "url = " in line and "github.com" in line:
+                    card["github_repo_url"] = line.split("url = ")[1].strip()
+                    break
+        except Exception:
+            pass
+
+    # Category heuristic
+    fw = card.get("framework", "")
+    if card.get("containerization") and fw.startswith("nextjs"):
+        card["project_category"] = "saas-app"
+    elif fw == "php":
+        card["project_category"] = "simple-website"
+    elif fw.startswith("nextjs"):
+        card["project_category"] = "agency-site"
+
+    if card:
+        columns = ["project", "created", "updated"]
+        values = [project, now, now]
+        for k, v in card.items():
+            columns.append(k)
+            values.append(v)
+        placeholders = ", ".join(["?"] * len(columns))
+        db.execute(
+            f"INSERT INTO project_identity ({', '.join(columns)}) VALUES ({placeholders})",
+            values
+        )
+        db.commit()
+
 
 def project_context() -> str:
     """Return Project DNA, last bridge, and stats for current project."""
     session = get_active_session()
     project = session.get("project", "")
+    project_path_str = session.get("project_path", "")
 
     if not project:
         return t("project_context.no_project")
 
     db = open_db()
     try:
+        # Lazy crash recovery (moved from session_start for faster startup)
+        crash_info = _check_crash_recovery(db, project)
+
+        # Lazy auto-detect identity (moved from session_start for faster startup)
+        if project_path_str:
+            _auto_detect_identity(db, project, Path(project_path_str))
+
         # Get project DNA
         proj = db.execute(
             "SELECT dna_content, created, last_session FROM projects WHERE name = ?",
@@ -188,4 +375,9 @@ def project_context() -> str:
             org_section += "\n" + t("project_context.org_contradictions",
                                      count=contradiction_count)
 
-    return f"{dna}{bridge}\n{stats}\n{health}{gaps}{ep_section}{org_section}"
+    # Include crash recovery info if detected
+    crash_section = ""
+    if crash_info:
+        crash_section = f"\n\n{crash_info}"
+
+    return f"{dna}{bridge}\n{stats}\n{health}{gaps}{ep_section}{org_section}{crash_section}"

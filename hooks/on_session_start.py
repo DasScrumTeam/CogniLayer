@@ -1,10 +1,14 @@
-"""CogniLayer SessionStart hook — runs when Claude Code starts."""
+"""CogniLayer SessionStart hook — runs when Claude Code starts.
+
+FAST PATH ONLY — must complete in <200ms.
+Heavy operations (crash recovery, identity detection, session cleanup)
+are deferred to MCP server tools (project_context, session_end).
+"""
 
 import json
 import sys
 import sqlite3
 import time
-import os
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +16,7 @@ from pathlib import Path
 COGNILAYER_HOME = Path.home() / ".cognilayer"
 DB_PATH = COGNILAYER_HOME / "memory.db"
 ACTIVE_SESSION_FILE = COGNILAYER_HOME / "active_session.json"
+SESSIONS_DIR = COGNILAYER_HOME / "sessions"
 
 # Import i18n (must be after COGNILAYER_HOME is defined)
 sys.path.insert(0, str(COGNILAYER_HOME / "mcp-server"))
@@ -27,11 +32,25 @@ COGNILAYER_END = "# === END COGNILAYER ==="
 COGNILAYER_START_LEGACY = "# === COGNILAYER (auto-generated, nemaz) ==="
 
 
+def read_claude_session_id() -> str:
+    """Read claude_session_id from stdin (Claude Code hook protocol)."""
+    try:
+        raw = sys.stdin.buffer.read()
+        if raw:
+            data = json.loads(raw.decode("utf-8"))
+            sid = data.get("session_id", "")
+            if sid:
+                return sid
+    except Exception:
+        pass
+    return str(uuid.uuid4())
+
+
 def open_db():
     db = sqlite3.connect(str(DB_PATH))
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA synchronous=NORMAL")
-    db.execute("PRAGMA busy_timeout=5000")
+    db.execute("PRAGMA busy_timeout=30000")
     db.execute("PRAGMA foreign_keys=ON")
     db.row_factory = sqlite3.Row
     return db
@@ -67,165 +86,6 @@ def register_project_if_new(db, name: str, path: Path):
     else:
         db.execute("UPDATE projects SET last_session = ? WHERE name = ?",
                    (datetime.now().isoformat(), name))
-
-
-def build_emergency_bridge(db, session_id: str) -> str:
-    """Build emergency bridge from changes and facts of a crashed session."""
-    changed_files = db.execute("""
-        SELECT DISTINCT file_path, action FROM changes
-        WHERE session_id = ? ORDER BY timestamp
-    """, (session_id,)).fetchall()
-
-    facts = db.execute("""
-        SELECT type, substr(content, 1, 80) FROM facts
-        WHERE session_id = ? ORDER BY timestamp
-    """, (session_id,)).fetchall()
-
-    lines = [t("session_end.emergency_header")]
-
-    if changed_files:
-        file_list = ", ".join(f"{f[0]} ({f[1]})" for f in changed_files[:10])
-        lines.append(f"Files: {file_list}")
-        if len(changed_files) > 10:
-            lines.append(t("session_end.and_more", count=len(changed_files) - 10))
-
-    if facts:
-        facts_summary = "; ".join(f"[{f[0]}] {f[1]}" for f in facts[:5])
-        lines.append(f"Facts: {facts_summary}")
-
-    if not changed_files and not facts:
-        lines.append(t("session_end.no_changes"))
-
-    return "\n".join(lines)
-
-
-def check_crash_recovery(db, project: str) -> str | None:
-    from datetime import timedelta
-    # Only treat sessions as crashed if they started more than 60 seconds ago.
-    # This avoids false positives from a concurrent session that is still running
-    # (e.g. two Claude Code windows on the same project).
-    cutoff = (datetime.now() - timedelta(seconds=60)).isoformat()
-    orphan = db.execute("""
-        SELECT s.id, s.start_time, s.bridge_content,
-               (SELECT COUNT(*) FROM changes WHERE session_id = s.id) as change_count,
-               (SELECT GROUP_CONCAT(file_path, ', ')
-                FROM (SELECT DISTINCT file_path FROM changes
-                      WHERE session_id = s.id
-                      ORDER BY timestamp DESC LIMIT 5)) as last_files
-        FROM sessions s
-        WHERE project = ? AND end_time IS NULL AND start_time < ?
-        ORDER BY start_time DESC LIMIT 1
-    """, (project, cutoff)).fetchone()
-    if orphan:
-        session_id, start_time, bridge_content, changes, last_files = (
-            orphan[0], orphan[1], orphan[2], orphan[3], orphan[4]
-        )
-        # Build emergency bridge if the crashed session has none
-        if not bridge_content:
-            bridge_content = build_emergency_bridge(db, session_id)
-            db.execute("UPDATE sessions SET bridge_content = ? WHERE id = ?",
-                       (bridge_content, session_id))
-        # Close the orphan session
-        db.execute("""
-            UPDATE sessions SET end_time = start_time,
-                summary = ?
-            WHERE id = ?
-        """, (t("crash.session_summary"), session_id))
-        return t("crash.recovery",
-                 start_time=start_time,
-                 changes=changes,
-                 last_files=last_files or t("crash.no_files"))
-    return None
-
-
-def auto_detect_identity(db, project: str, project_path: Path):
-    """Auto-detect tech stack from project files. 0 tokens."""
-    existing = db.execute("SELECT project FROM project_identity WHERE project = ?", (project,)).fetchone()
-    if existing:
-        return  # Already has identity card
-
-    card = {}
-    now = datetime.now().isoformat()
-
-    # package.json detection
-    pkg = project_path / "package.json"
-    if pkg.exists():
-        try:
-            data = json.loads(pkg.read_text(encoding="utf-8"))
-            deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
-            if "next" in deps:
-                ver = deps["next"].lstrip("^~").split(".")[0]
-                card["framework"] = f"nextjs-{ver}"
-                card["language"] = "typescript" if "typescript" in deps else "javascript"
-            if "tailwindcss" in deps:
-                ver = deps["tailwindcss"].lstrip("^~").split(".")[0]
-                card["css_approach"] = f"tailwind-v{ver}"
-            if "better-sqlite3" in deps:
-                card["db_technology"] = "better-sqlite3"
-                card["db_type"] = "sqlite"
-            elif "@prisma/client" in deps:
-                card["db_technology"] = "prisma"
-            card["package_manager"] = (
-                "bun" if (project_path / "bun.lockb").exists()
-                else "pnpm" if (project_path / "pnpm-lock.yaml").exists()
-                else "npm"
-            )
-        except Exception:
-            pass
-
-    # PHP detection
-    if list(project_path.glob("*.php"))[:1] and "framework" not in card:
-        card["framework"] = "php"
-        card["language"] = "php"
-
-    # Python detection
-    if (project_path / "pyproject.toml").exists() and "framework" not in card:
-        card["language"] = "python"
-        try:
-            content = (project_path / "pyproject.toml").read_text(encoding="utf-8")
-            if "fastapi" in content.lower():
-                card["framework"] = "fastapi"
-            elif "django" in content.lower():
-                card["framework"] = "django"
-        except Exception:
-            pass
-
-    # Docker detection
-    if (project_path / "docker-compose.yml").exists() or (project_path / "docker-compose.yaml").exists():
-        card["containerization"] = "docker-compose"
-        card["hosting_pattern"] = "docker"
-
-    # Git remote detection
-    git_config = project_path / ".git" / "config"
-    if git_config.exists():
-        try:
-            for line in git_config.read_text(encoding="utf-8").splitlines():
-                if "url = " in line and "github.com" in line:
-                    card["github_repo_url"] = line.split("url = ")[1].strip()
-                    break
-        except Exception:
-            pass
-
-    # Category heuristic
-    fw = card.get("framework", "")
-    if card.get("containerization") and fw.startswith("nextjs"):
-        card["project_category"] = "saas-app"
-    elif fw == "php":
-        card["project_category"] = "simple-website"
-    elif fw.startswith("nextjs"):
-        card["project_category"] = "agency-site"
-
-    if card:
-        columns = ["project", "created", "updated"]
-        values = [project, now, now]
-        for k, v in card.items():
-            columns.append(k)
-            values.append(v)
-        placeholders = ", ".join(["?"] * len(columns))
-        db.execute(
-            f"INSERT INTO project_identity ({', '.join(columns)}) VALUES ({placeholders})",
-            values
-        )
 
 
 def get_or_generate_dna(db, project: str, project_path: Path) -> str:
@@ -300,26 +160,42 @@ def get_latest_bridge(db, project: str) -> str | None:
     return None
 
 
-def create_session(db, project: str) -> str:
+def create_session(db, project: str, claude_session_id: str | None = None) -> str:
     session_id = str(uuid.uuid4())
     db.execute(
-        "INSERT INTO sessions (id, project, start_time) VALUES (?, ?, ?)",
-        (session_id, project, datetime.now().isoformat())
+        "INSERT INTO sessions (id, project, start_time, claude_session_id) VALUES (?, ?, ?, ?)",
+        (session_id, project, datetime.now().isoformat(), claude_session_id)
     )
     return session_id
 
 
-def write_active_session(session_id: str, project: str, project_path: str):
+def write_session_file(session_id: str, project: str, project_path: str,
+                       claude_session_id: str | None = None):
+    """Write per-session file + legacy active_session.json for backwards compat."""
     data = {
         "session_id": session_id,
         "project": project,
         "project_path": str(project_path).replace("\\", "/"),
-        "start_time": datetime.now().isoformat()
+        "start_time": datetime.now().isoformat(),
+        "claude_session_id": claude_session_id,
     }
-    ACTIVE_SESSION_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    payload = json.dumps(data, indent=2)
+
+    # Per-session file
+    if claude_session_id:
+        SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        (SESSIONS_DIR / f"{claude_session_id}.json").write_text(payload, encoding="utf-8")
+
+    # Legacy fallback (always write for backwards compat)
+    ACTIVE_SESSION_FILE.write_text(payload, encoding="utf-8")
 
 
-def get_cognilayer_block(dna: str, bridge: str | None, crash_info: str | None) -> str:
+# Keep old name as alias for backwards compat (session_init.py imports it)
+def write_active_session(session_id: str, project: str, project_path: str):
+    write_session_file(session_id, project, project_path)
+
+
+def get_cognilayer_block(dna: str, bridge: str | None) -> str:
     """Build the CLAUDE.md injection block."""
     lines = [COGNILAYER_START, ""]
     lines.append(t("claude_md.template"))
@@ -331,18 +207,14 @@ def get_cognilayer_block(dna: str, bridge: str | None, crash_info: str | None) -
         lines.append("")
         lines.append(f"## Last Session Bridge\n{bridge}")
 
-    if crash_info:
-        lines.append("")
-        lines.append(crash_info)
-
     lines.append("")
     lines.append(COGNILAYER_END)
     return "\n".join(lines)
 
 
-def inject_cognilayer_block(claude_md_path: Path, dna: str, bridge: str | None, crash_info: str | None):
-    """Inject CogniLayer block into CLAUDE.md."""
-    block = get_cognilayer_block(dna, bridge, crash_info)
+def _inject_once(claude_md_path: Path, dna: str, bridge: str | None):
+    """Actual injection logic (no retry)."""
+    block = get_cognilayer_block(dna, bridge)
 
     if claude_md_path.exists():
         content = claude_md_path.read_text(encoding="utf-8")
@@ -367,12 +239,26 @@ def inject_cognilayer_block(claude_md_path: Path, dna: str, bridge: str | None, 
     claude_md_path.write_text(new_content, encoding="utf-8", newline="\n")
 
 
-def main():
-    start = time.time()
+def inject_cognilayer_block(claude_md_path: Path, dna: str, bridge: str | None):
+    """Inject CogniLayer block into CLAUDE.md with retry for concurrent writes on Windows."""
+    for attempt in range(3):
+        try:
+            _inject_once(claude_md_path, dna, bridge)
+            return
+        except (PermissionError, OSError):
+            if attempt < 2:
+                time.sleep(0.2 * (attempt + 1))
+            else:
+                raise
 
+
+def main():
     if not DB_PATH.exists():
         # DB not initialized yet — skip
         return
+
+    # Read claude_session_id from stdin (Claude Code hook protocol)
+    claude_session_id = read_claude_session_id()
 
     project_path = Path.cwd()
     project_name = detect_project(project_path)
@@ -380,29 +266,27 @@ def main():
     db = open_db()
     try:
         register_project_if_new(db, project_name, project_path)
-        crash_info = check_crash_recovery(db, project_name)
-        auto_detect_identity(db, project_name, project_path)
+        # Heavy operations REMOVED from here — deferred to MCP tools:
+        # - cleanup_old_sessions → on_session_end.py
+        # - check_crash_recovery → project_context tool (lazy)
+        # - auto_detect_identity → project_context tool (lazy)
         dna = get_or_generate_dna(db, project_name, project_path)
         bridge = get_latest_bridge(db, project_name)
-        session_id = create_session(db, project_name)
-        write_active_session(session_id, project_name, project_path)
-        inject_cognilayer_block(project_path / "CLAUDE.md", dna, bridge, crash_info)
+        session_id = create_session(db, project_name, claude_session_id)
 
-        # Re-index if time allows
-        elapsed = time.time() - start
-        if elapsed < 1.5:
-            try:
-                sys.path.insert(0, str(COGNILAYER_HOME / "mcp-server"))
-                from indexer.file_indexer import reindex_project
-                reindex_project(db, project_name, project_path, time_budget=2.0 - elapsed)
-            except Exception:
-                pass  # Indexer not critical
-
+        # Commit DB changes BEFORE file I/O to release write lock early
         db.commit()
     except Exception as e:
         sys.stderr.write(f"CogniLayer SessionStart error: {e}\n")
     finally:
         db.close()
+
+    # File I/O outside DB lock — safe for concurrent access
+    try:
+        write_session_file(session_id, project_name, project_path, claude_session_id)
+        inject_cognilayer_block(project_path / "CLAUDE.md", dna, bridge)
+    except Exception as e:
+        sys.stderr.write(f"CogniLayer SessionStart file write error: {e}\n")
 
 
 if __name__ == "__main__":

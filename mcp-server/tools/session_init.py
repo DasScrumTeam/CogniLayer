@@ -17,6 +17,7 @@ hanging on model downloads or slow I/O.
 
 import logging
 import sys
+import uuid
 from pathlib import Path
 
 COGNILAYER_HOME = Path.home() / ".cognilayer"
@@ -41,7 +42,7 @@ def session_init(project_path: str | None = None) -> str:
     from on_session_start import (
         detect_project, register_project_if_new, check_crash_recovery,
         auto_detect_identity, get_or_generate_dna, get_latest_bridge,
-        create_session, write_active_session, open_db
+        create_session, write_session_file, open_db
     )
 
     if not DB_PATH.exists():
@@ -59,6 +60,9 @@ def session_init(project_path: str | None = None) -> str:
     project_name = detect_project(path)
     logger.info("Detected project: %s at %s", project_name, path)
 
+    # Generate claude_session_id for Codex CLI (it doesn't provide one)
+    claude_session_id = str(uuid.uuid4())
+
     db = open_db()
     try:
         register_project_if_new(db, project_name, path)
@@ -66,8 +70,8 @@ def session_init(project_path: str | None = None) -> str:
         auto_detect_identity(db, project_name, path)
         dna = get_or_generate_dna(db, project_name, path)
         bridge = get_latest_bridge(db, project_name)
-        session_id = create_session(db, project_name)
-        write_active_session(session_id, project_name, str(path))
+        session_id = create_session(db, project_name, claude_session_id)
+        write_session_file(session_id, project_name, str(path), claude_session_id)
 
         # NOTE: reindex_project intentionally NOT called here.
         # It can hang on first run (fastembed model download ~130MB)

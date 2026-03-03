@@ -9,6 +9,7 @@ from pathlib import Path
 COGNILAYER_HOME = Path.home() / ".cognilayer"
 DB_PATH = COGNILAYER_HOME / "memory.db"
 ACTIVE_SESSION_FILE = COGNILAYER_HOME / "active_session.json"
+SESSIONS_DIR = COGNILAYER_HOME / "sessions"
 LOG_PATH = COGNILAYER_HOME / "logs" / "cognilayer.log"
 
 # Import i18n
@@ -24,17 +25,44 @@ def open_db():
     db = sqlite3.connect(str(DB_PATH))
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA synchronous=NORMAL")
-    db.execute("PRAGMA busy_timeout=5000")
+    db.execute("PRAGMA busy_timeout=30000")
     db.execute("PRAGMA foreign_keys=ON")
     db.row_factory = sqlite3.Row
     return db
 
 
-def read_active_session():
+def read_claude_session_id() -> str | None:
+    """Read claude_session_id from stdin (Claude Code hook protocol)."""
+    try:
+        raw = sys.stdin.buffer.read()
+        if raw:
+            data = json.loads(raw.decode("utf-8"))
+            return data.get("session_id", "")
+    except Exception:
+        pass
+    return None
+
+
+def read_session_info(claude_session_id: str | None):
+    """Read session info from per-session file, fallback to legacy active_session.json."""
+    # Try per-session file first
+    if claude_session_id:
+        session_file = SESSIONS_DIR / f"{claude_session_id}.json"
+        if session_file.exists():
+            try:
+                data = json.loads(session_file.read_text(encoding="utf-8"))
+                return data.get("session_id", ""), data.get("project", ""), session_file
+            except Exception:
+                pass
+
+    # Fallback to legacy active_session.json
     if ACTIVE_SESSION_FILE.exists():
-        data = json.loads(ACTIVE_SESSION_FILE.read_text(encoding="utf-8"))
-        return data.get("session_id", ""), data.get("project", "")
-    return "", ""
+        try:
+            data = json.loads(ACTIVE_SESSION_FILE.read_text(encoding="utf-8"))
+            return data.get("session_id", ""), data.get("project", ""), None
+        except Exception:
+            pass
+    return "", "", None
 
 
 def build_emergency_bridge(db, session_id: str) -> str:
@@ -161,11 +189,35 @@ def log_session_end(project: str, session_id: str, changes: int, facts: int):
         pass
 
 
+def cleanup_old_sessions(db):
+    """Remove per-session files for sessions already closed in DB."""
+    if not SESSIONS_DIR.exists():
+        return
+    try:
+        for f in SESSIONS_DIR.iterdir():
+            if not f.name.endswith(".json"):
+                continue
+            claude_sid = f.stem
+            row = db.execute(
+                "SELECT end_time FROM sessions WHERE claude_session_id = ?",
+                (claude_sid,)
+            ).fetchone()
+            # If session is closed (has end_time) or unknown, remove the file
+            if row and row[0]:
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
 def main():
     if not DB_PATH.exists():
         return
 
-    session_id, project_name = read_active_session()
+    claude_session_id = read_claude_session_id()
+    session_id, project_name, session_file = read_session_info(claude_session_id)
     if not session_id:
         return
 
@@ -201,15 +253,28 @@ def main():
         # Build episode metadata from session activity
         build_episode(db, session_id, project_name)
 
+        # Cleanup old session files (moved from session_start for faster startup)
+        cleanup_old_sessions(db)
+
         db.commit()
     except Exception as e:
         sys.stderr.write(f"CogniLayer SessionEnd error: {e}\n")
     finally:
         db.close()
 
-    # Cleanup active session file
+    # Cleanup per-session file
+    if session_file:
+        try:
+            session_file.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    # Also try to cleanup legacy active_session.json if it matches this session
     try:
-        ACTIVE_SESSION_FILE.unlink(missing_ok=True)
+        if ACTIVE_SESSION_FILE.exists():
+            data = json.loads(ACTIVE_SESSION_FILE.read_text(encoding="utf-8"))
+            if data.get("session_id") == session_id:
+                ACTIVE_SESSION_FILE.unlink(missing_ok=True)
     except Exception:
         pass
 

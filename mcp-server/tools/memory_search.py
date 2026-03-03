@@ -1,5 +1,6 @@
 """memory_search — Hybrid search (FTS5 + vector) with staleness detection and heat decay."""
 
+import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -75,32 +76,39 @@ def _apply_heat_decay(db, project: str):
         FROM facts WHERE project = ? AND heat_score > 0.05
     """, (project,)).fetchall()
 
-    for row in rows:
-        fact_id, fact_type, heat, last_access, created = row
-        heat = heat or 1.0
-        ref_time = last_access or created
+    try:
+        for row in rows:
+            fact_id, fact_type, heat, last_access, created = row
+            heat = heat or 1.0
+            ref_time = last_access or created
 
+            try:
+                access_time = datetime.fromisoformat(ref_time)
+                if access_time.tzinfo is not None:
+                    access_time = access_time.replace(tzinfo=None)
+            except (ValueError, TypeError):
+                continue
+
+            age_days = max(0, (now - access_time).total_seconds() / 86400)
+            if age_days < 1:
+                continue  # No decay for facts accessed within last day
+
+            half_life = DECAY_HALF_LIVES.get(fact_type, 60)
+            new_heat = max(0.05, 0.5 ** (age_days / half_life))
+
+            if abs(new_heat - heat) > 0.001:
+                db.execute(
+                    "UPDATE facts SET heat_score = ? WHERE id = ?",
+                    (new_heat, fact_id)
+                )
+
+        db.commit()
+    except sqlite3.OperationalError:
+        # Database locked by another CLI — skip decay, not critical
         try:
-            access_time = datetime.fromisoformat(ref_time)
-            if access_time.tzinfo is not None:
-                access_time = access_time.replace(tzinfo=None)
-        except (ValueError, TypeError):
-            continue
-
-        age_days = max(0, (now - access_time).total_seconds() / 86400)
-        if age_days < 1:
-            continue  # No decay for facts accessed within last day
-
-        half_life = DECAY_HALF_LIVES.get(fact_type, 60)
-        new_heat = max(0.05, 0.5 ** (age_days / half_life))
-
-        if abs(new_heat - heat) > 0.001:
-            db.execute(
-                "UPDATE facts SET heat_score = ? WHERE id = ?",
-                (new_heat, fact_id)
-            )
-
-    db.commit()
+            db.rollback()
+        except Exception:
+            pass
 
 
 def _normalize_query(query: str) -> str:
@@ -210,55 +218,101 @@ def _get_causal_chains(db, results: list) -> dict:
 def memory_search(query: str, scope: str = "project",
                   type: str = None, limit: int = 5) -> str:
     """Search CogniLayer memory using hybrid FTS5 + vector search."""
+    import time as _t
+    import logging
+    _log = logging.getLogger("cognilayer.memory_search")
+    _t0 = _t.time()
+    _trace_file = Path(__file__).parent.parent.parent / "logs" / "trace.log"
+    def _trace(step):
+        msg = f"[{_t.time() - _t0:.3f}s] memory_search: {step}"
+        _log.info("TRACE %s", msg)
+        # Unbuffered write for real-time debugging
+        try:
+            with open(_trace_file, "a", encoding="utf-8") as f:
+                f.write(f"{datetime.now().isoformat()} {msg}\n")
+        except Exception:
+            pass
+
+    _trace("START get_active_session")
     session = get_active_session()
     project = session.get("project", "")
     project_path = session.get("project_path", "")
+    _trace(f"GOT session project={project}")
 
     limit = min(limit, 10)
 
+    _trace("START open_db")
     db = open_db()
+    _trace("DB opened")
     try:
-        # Apply heat decay before searching
+        # Apply heat decay before searching (non-critical write — skip on lock)
         if project:
-            _apply_heat_decay(db, project)
+            _trace("START heat_decay")
+            try:
+                _apply_heat_decay(db, project)
+                _trace("heat_decay DONE")
+            except sqlite3.OperationalError as e:
+                _trace(f"heat_decay SKIPPED (locked): {e}")
 
+        _trace("START fts_search_facts")
         results = fts_search_facts(
             db, query, project=project, fact_type=type,
             limit=limit, scope=scope
         )
+        _trace(f"fts_search DONE: {len(results)} results")
 
-        # Boost accessed facts' heat + track retrieval
-        now_str = datetime.now().isoformat()
-        for r in results:
+        # Boost accessed facts' heat + track retrieval (non-critical write)
+        _trace("START heat_boost")
+        try:
+            now_str = datetime.now().isoformat()
+            for r in results:
+                try:
+                    db.execute("""
+                        UPDATE facts SET heat_score = MIN(1.0, heat_score + 0.2),
+                                         last_accessed = ?,
+                                         retrieval_count = COALESCE(retrieval_count, 0) + 1,
+                                         last_retrieved = ?
+                        WHERE id = ?
+                    """, (now_str, now_str, r["id"]))
+                except sqlite3.OperationalError:
+                    _trace("heat_boost LOCKED, skipping")
+                    break
+                except Exception:
+                    try:
+                        db.execute("""
+                            UPDATE facts SET heat_score = MIN(1.0, heat_score + 0.2),
+                                             last_accessed = ?
+                            WHERE id = ?
+                        """, (now_str, r["id"]))
+                    except sqlite3.OperationalError:
+                        _trace("heat_boost fallback LOCKED, skipping")
+                        break
+                    break
+            db.commit()
+            _trace("heat_boost DONE")
+        except sqlite3.OperationalError:
+            _trace("heat_boost commit LOCKED, rollback")
             try:
-                db.execute("""
-                    UPDATE facts SET heat_score = MIN(1.0, heat_score + 0.2),
-                                     last_accessed = ?,
-                                     retrieval_count = COALESCE(retrieval_count, 0) + 1,
-                                     last_retrieved = ?
-                    WHERE id = ?
-                """, (now_str, now_str, r["id"]))
+                db.rollback()
             except Exception:
-                # Pre-migration DB: fall back to heat-only update
-                db.execute("""
-                    UPDATE facts SET heat_score = MIN(1.0, heat_score + 0.2),
-                                     last_accessed = ?
-                    WHERE id = ?
-                """, (now_str, r["id"]))
-                break  # All rows lack V3 columns, no need to retry each
-        db.commit()
+                pass
 
         # Knowledge gap tracking (table may not exist on pre-migration DB)
+        _trace("START knowledge_gap")
         try:
             _log_knowledge_gap(db, query, project, type, results)
         except Exception:
             pass
+        _trace("knowledge_gap DONE")
 
-        # Fetch linked facts and causal chains for display
+        # Fetch linked facts and causal chains for display (read-only)
+        _trace("START linked_facts + chains")
         linked_map = _get_linked_facts(db, results)
         chain_map = _get_causal_chains(db, results)
+        _trace("linked + chains DONE")
     finally:
         db.close()
+        _trace("DB closed, DONE")
 
     if not results:
         return t("memory_search.no_results", query=query)
