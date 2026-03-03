@@ -273,10 +273,10 @@ _EN: dict[str, str] = {
     # hooks/on_session_start.py
     # ======================================================================
     "claude_md.template": (
-        "## CogniLayer v3 Active\n"
+        "## CogniLayer v4 Active\n"
         "Persistent memory is ON.\n"
         "ON FIRST USER MESSAGE in this session, briefly tell the user:\n"
-        "  'CogniLayer v3 active — persistent memory is on. Type /cognihelp for available commands.'\n"
+        "  'CogniLayer v4 active — persistent memory is on. Type /cognihelp for available commands.'\n"
         "Say it ONCE, keep it short, then continue with their request.\n"
         "\n"
         "## Memory Tools\n"
@@ -772,10 +772,10 @@ _CS: dict[str, str] = {
     # hooks/on_session_start.py
     # ======================================================================
     "claude_md.template": (
-        "## CogniLayer v3 Aktivni\n"
+        "## CogniLayer v4 Aktivni\n"
         "Trvala pamet je ZAPNUTA.\n"
         "PRI PRVNI ZPRAVE UZIVATELE v teto session mu strucne rekni:\n"
-        "  'CogniLayer v3 aktivni — trvala pamet zapnuta. Napis /cognihelp pro prehled prikazu.'\n"
+        "  'CogniLayer v4 aktivni — trvala pamet zapnuta. Napis /cognihelp pro prehled prikazu.'\n"
         "Rekni to JEDNOU, strucne, pak pokracuj s jeho pozadavkem.\n"
         "\n"
         "## Pametove nastroje\n"

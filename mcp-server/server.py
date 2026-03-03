@@ -1,4 +1,4 @@
-"""CogniLayer MCP Server — V3 (FTS5 + vector + linking + gap tracking + episodes + causal chains + Codex).
+"""CogniLayer MCP Server — V4 (knowledge layer + code intelligence + safety for AI coding agents).
 
 Entry point for the MCP server registered in ~/.claude/settings.json or ~/.codex/config.toml.
 Provides 17 tools for Claude Code / Codex CLI to interact with CogniLayer memory and code intelligence.

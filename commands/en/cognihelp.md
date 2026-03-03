@@ -4,7 +4,7 @@ Print this EXACTLY (do not modify or summarize):
 
 ---
 
-**CogniLayer v3 — Active**
+**CogniLayer v4 — Active**
 
 Your AI has persistent memory. Facts, decisions, and context survive across sessions.
 

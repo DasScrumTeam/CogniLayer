@@ -1,4 +1,4 @@
-"""CogniLayer v3 — Database schema creation and migration.
+"""CogniLayer v4 — Database schema creation and migration.
 
 Run: python init_db.py
 Creates ~/.cognilayer/memory.db with all tables, FTS5 indexes, vector tables, and regular indexes.

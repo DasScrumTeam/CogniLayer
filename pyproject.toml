@@ -1,6 +1,6 @@
 [project]
 name = "cognilayer"
-version = "3.1.0"
+version = "4.0.0"
 description = "Persistent memory for Claude Code & Codex CLI — save ~100K tokens/session. 13 MCP tools, hybrid search, TUI dashboard, crash recovery."
 readme = "README.md"
 license = "Elastic-2.0"

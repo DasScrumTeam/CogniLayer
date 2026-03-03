@@ -4,7 +4,7 @@ Vypis PRESNE toto (neupravuj ani neshrnuj):
 
 ---
 
-**CogniLayer v3 — Aktivni**
+**CogniLayer v4 — Aktivni**
 
 Tvuj AI ma trvalou pamet. Fakty, rozhodnuti a kontext preziji mezi sessions.
 

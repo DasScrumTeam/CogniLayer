@@ -1,4 +1,4 @@
-# CogniLayer v3
+# CogniLayer v4
 
 ### Your AI agent just got mass, context and a memory.
 
@@ -12,7 +12,7 @@ It's a local MCP server that gives your AI coding agent three things it doesn't 
 
 > Works with **Claude Code** and **OpenAI Codex CLI** — same brain, two agents.
 
-[![Version](https://img.shields.io/badge/version-3.1.0-orange.svg)](#)
+[![Version](https://img.shields.io/badge/version-4.0.0-orange.svg)](#)
 [![License: Elastic-2.0](https://img.shields.io/badge/License-Elastic%202.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-green.svg)](https://www.python.org/)
 [![MCP Server](https://img.shields.io/badge/MCP-17%20tools-purple.svg)](https://modelcontextprotocol.io/)
