@@ -185,8 +185,8 @@ def index_project(db: sqlite3.Connection, project: str, project_path: str,
                 stats["errors"].append(f"{finfo['rel_path']}: DB locked")
                 try:
                     db.rollback()
-                except Exception:
-                    pass
+                except sqlite3.OperationalError:
+                    _log.debug("Rollback also failed after DB lock")
             else:
                 raise
 
@@ -287,14 +287,14 @@ def reindex_dirty(db: sqlite3.Connection, project: str, project_path: str,
             stats["errors"].append(f"{file_path}: DB error: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except sqlite3.OperationalError:
+                _log.debug("Rollback also failed for %s", file_path)
 
     if stats["files_indexed"] > 0:
         try:
             stats["resolved"] = resolve_references(db, project)
-        except Exception:
-            pass
+        except Exception as e:
+            _log.warning("Reference resolution failed in reindex_dirty: %s", e)
 
     stats["elapsed"] = time.time() - start_time
     return stats
@@ -430,5 +430,5 @@ def _delete_file(db: sqlite3.Connection, file_id: int) -> None:
     _db_execute_with_retry(db, "DELETE FROM code_files WHERE id = ?", (file_id,))
     try:
         db.commit()
-    except Exception:
-        pass
+    except sqlite3.OperationalError as e:
+        _log.warning("Commit failed in _delete_file for file_id=%d: %s", file_id, e)

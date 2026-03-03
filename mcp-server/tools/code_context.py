@@ -6,6 +6,7 @@ import sqlite3
 from db import open_db
 from i18n import t
 from utils import get_active_session
+from tools.code_helpers import has_index, reindex_dirty, find_symbol
 
 _log = logging.getLogger("cognilayer.tools.code_context")
 
@@ -29,7 +30,7 @@ def code_context(symbol: str, project_name: str | None = None) -> str:
         db = open_db()
 
         # Auto-index check
-        if not _has_index(db, project):
+        if not has_index(db, project):
             try:
                 import tree_sitter_language_pack  # noqa: F401
             except ImportError:
@@ -37,10 +38,10 @@ def code_context(symbol: str, project_name: str | None = None) -> str:
             return t("code.not_indexed", project=project)
 
         # Reindex dirty files first
-        _reindex_dirty(db, project, path)
+        reindex_dirty(db, project, path)
 
         # Find the symbol
-        sym = _find_symbol(db, project, symbol)
+        sym = find_symbol(db, project, symbol)
         if not sym:
             return t("code.symbol_not_found", symbol=symbol)
 
@@ -145,68 +146,3 @@ def code_context(symbol: str, project_name: str | None = None) -> str:
                 pass
 
 
-def _find_symbol(db, project, symbol):
-    """Find a symbol by name or qualified_name."""
-    # Try exact qualified_name first
-    row = db.execute("""
-        SELECT s.*, f.file_path
-        FROM code_symbols s
-        JOIN code_files f ON f.id = s.file_id
-        WHERE s.project = ? AND s.qualified_name = ?
-    """, (project, symbol)).fetchone()
-
-    if row:
-        return row
-
-    # Try exact name
-    row = db.execute("""
-        SELECT s.*, f.file_path
-        FROM code_symbols s
-        JOIN code_files f ON f.id = s.file_id
-        WHERE s.project = ? AND s.name = ?
-        ORDER BY s.exported DESC, s.line_start
-        LIMIT 1
-    """, (project, symbol)).fetchone()
-
-    if row:
-        return row
-
-    # Try LIKE match
-    row = db.execute("""
-        SELECT s.*, f.file_path
-        FROM code_symbols s
-        JOIN code_files f ON f.id = s.file_id
-        WHERE s.project = ? AND (s.name LIKE ? OR s.qualified_name LIKE ?)
-        ORDER BY s.exported DESC, s.line_start
-        LIMIT 1
-    """, (project, f"%{symbol}%", f"%{symbol}%")).fetchone()
-
-    return row
-
-
-def _has_index(db, project):
-    """Check if project has any indexed files."""
-    try:
-        row = db.execute(
-            "SELECT COUNT(*) as cnt FROM code_files WHERE project = ?",
-            (project,)
-        ).fetchone()
-        return row["cnt"] > 0
-    except sqlite3.OperationalError:
-        return False
-
-
-def _reindex_dirty(db, project, path):
-    """Reindex dirty files if any."""
-    if not path:
-        return
-    try:
-        dirty = db.execute(
-            "SELECT COUNT(*) as cnt FROM code_files WHERE project = ? AND is_dirty = 1",
-            (project,)
-        ).fetchone()
-        if dirty and dirty["cnt"] > 0:
-            from code.indexer import reindex_dirty
-            reindex_dirty(db, project, path, time_budget=5.0)
-    except Exception as e:
-        _log.warning("Dirty reindex in code_context failed: %s", e)

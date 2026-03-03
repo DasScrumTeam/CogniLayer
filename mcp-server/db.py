@@ -14,6 +14,18 @@ def get_db_path() -> Path:
     return DB_PATH
 
 
+def open_db_fast() -> sqlite3.Connection:
+    """Fast-path DB open for hooks (no logging, no vec). All PRAGMAs consistent with open_db."""
+    db = sqlite3.connect(str(DB_PATH))
+    db.execute("PRAGMA journal_mode=WAL")
+    db.execute("PRAGMA synchronous=NORMAL")
+    db.execute("PRAGMA busy_timeout=30000")
+    db.execute("PRAGMA wal_autocheckpoint=1000")
+    db.execute("PRAGMA foreign_keys=ON")
+    db.row_factory = sqlite3.Row
+    return db
+
+
 def open_db(with_vec: bool = False) -> sqlite3.Connection:
     """Open DB with WAL mode + busy_timeout for multi-CLI safety.
 

@@ -47,13 +47,8 @@ def read_claude_session_id() -> str:
 
 
 def open_db():
-    db = sqlite3.connect(str(DB_PATH))
-    db.execute("PRAGMA journal_mode=WAL")
-    db.execute("PRAGMA synchronous=NORMAL")
-    db.execute("PRAGMA busy_timeout=30000")
-    db.execute("PRAGMA foreign_keys=ON")
-    db.row_factory = sqlite3.Row
-    return db
+    from db import open_db_fast
+    return open_db_fast()
 
 
 def detect_project(path: Path) -> str:

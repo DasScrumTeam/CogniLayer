@@ -6,6 +6,7 @@ import sqlite3
 from db import open_db
 from i18n import t
 from utils import get_active_session
+from tools.code_helpers import has_index, reindex_dirty
 
 _log = logging.getLogger("cognilayer.tools.code_search")
 
@@ -29,10 +30,10 @@ def code_search(query: str, kind: str | None = None,
         db = open_db()
 
         # Auto-index check + dirty reindex
-        if not _has_index(db, project):
+        if not has_index(db, project):
             return _auto_index_hint(project, path)
 
-        _reindex_dirty_if_needed(db, project, path)
+        reindex_dirty(db, project, path)
 
         limit = min(limit, 50)
 
@@ -127,18 +128,6 @@ def _search_like(db, project, query, kind, limit):
     return db.execute(sql, params).fetchall()
 
 
-def _has_index(db, project):
-    """Check if project has any indexed files."""
-    try:
-        row = db.execute(
-            "SELECT COUNT(*) as cnt FROM code_files WHERE project = ?",
-            (project,)
-        ).fetchone()
-        return row["cnt"] > 0
-    except sqlite3.OperationalError:
-        return False
-
-
 def _auto_index_hint(project, path):
     """Return hint to run code_index first, or tree-sitter install hint."""
     try:
@@ -146,22 +135,6 @@ def _auto_index_hint(project, path):
     except ImportError:
         return t("code.no_treesitter")
     return t("code.not_indexed", project=project)
-
-
-def _reindex_dirty_if_needed(db, project, path):
-    """Reindex dirty files if any."""
-    if not path:
-        return
-    try:
-        dirty = db.execute(
-            "SELECT COUNT(*) as cnt FROM code_files WHERE project = ? AND is_dirty = 1",
-            (project,)
-        ).fetchone()
-        if dirty and dirty["cnt"] > 0:
-            from code.indexer import reindex_dirty
-            reindex_dirty(db, project, path, time_budget=5.0)
-    except Exception as e:
-        _log.warning("Dirty reindex failed: %s", e)
 
 
 def _kind_icon(kind: str) -> str:

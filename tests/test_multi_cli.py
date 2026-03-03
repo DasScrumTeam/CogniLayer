@@ -148,16 +148,16 @@ class TestBusyTimeout:
         assert val == 30000, f"Expected 30000, got {val}"
 
     def test_on_session_start_has_30000(self, tmp_cognilayer):
-        """on_session_start open_db() sets busy_timeout=30000."""
+        """on_session_start open_db() delegates to db.open_db_fast (busy_timeout=30000)."""
         source = Path(__file__).parent.parent / "hooks" / "on_session_start.py"
         content = source.read_text(encoding="utf-8")
-        assert "busy_timeout=30000" in content, "on_session_start.py should use busy_timeout=30000"
+        assert "open_db_fast" in content, "on_session_start.py should delegate to db.open_db_fast"
 
     def test_on_session_end_has_30000(self):
-        """on_session_end open_db() sets busy_timeout=30000."""
+        """on_session_end open_db() delegates to db.open_db_fast (busy_timeout=30000)."""
         source = Path(__file__).parent.parent / "hooks" / "on_session_end.py"
         content = source.read_text(encoding="utf-8")
-        assert "busy_timeout=30000" in content, "on_session_end.py should use busy_timeout=30000"
+        assert "open_db_fast" in content, "on_session_end.py should delegate to db.open_db_fast"
 
     def test_on_file_change_has_short_timeout(self):
         """on_file_change uses short busy_timeout (hook must be <100ms)."""

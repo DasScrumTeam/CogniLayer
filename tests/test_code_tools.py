@@ -295,6 +295,78 @@ class TestIndexer:
         assert "large.py" not in paths
 
 
+class TestCodeHelpers:
+    """Test shared code_helpers and consistency between tools."""
+
+    def test_find_symbol_deterministic(self, project_with_code):
+        """Both code_context and code_impact should find the same symbol."""
+        from tools.code_index import code_index
+        from tools.code_context import code_context
+        from tools.code_impact import code_impact
+
+        code_index(project_path=str(project_with_code))
+
+        # Both tools should find open_db and report the same file
+        ctx = code_context(symbol="open_db")
+        imp = code_impact(symbol="open_db")
+
+        # Both should contain the symbol's file location
+        assert "db.py" in ctx
+        assert "db.py" in imp
+
+    def test_find_symbol_ambiguous_name(self, tmp_path, active_session, monkeypatch):
+        """When multiple symbols share a name, both tools should pick the same one."""
+        src = tmp_path / "src"
+        src.mkdir()
+
+        # Create two files with same function name
+        (src / "a_module.py").write_text('''
+def helper():
+    """Helper in a_module — not exported."""
+    return "a"
+''', encoding="utf-8")
+
+        (src / "b_module.py").write_text('''
+def helper():
+    """Helper in b_module — not exported."""
+    return "b"
+''', encoding="utf-8")
+
+        from tools.code_index import code_index
+        from tools.code_context import code_context
+        from tools.code_impact import code_impact
+
+        code_index(project_path=str(tmp_path))
+
+        ctx = code_context(symbol="helper")
+        imp = code_impact(symbol="helper")
+
+        # Both should find a valid result (not "not found")
+        assert "helper" in ctx.lower()
+        assert "helper" in imp.lower()
+
+        # Extract file path from both results — they must match
+        ctx_file = "a_module" if "a_module" in ctx else "b_module"
+        imp_file = "a_module" if "a_module" in imp else "b_module"
+        assert ctx_file == imp_file, (
+            f"Inconsistent symbol resolution: code_context found {ctx_file}, "
+            f"code_impact found {imp_file}"
+        )
+
+    def test_shared_helpers_imported(self):
+        """Verify that code tools import from code_helpers, not local copies."""
+        from tools import code_context, code_impact, code_search
+        from tools.code_helpers import has_index, reindex_dirty, find_symbol
+
+        # These modules should NOT have local _has_index or _reindex_dirty
+        assert not hasattr(code_context, "_has_index")
+        assert not hasattr(code_impact, "_has_index")
+        assert not hasattr(code_search, "_has_index")
+        assert not hasattr(code_context, "_reindex_dirty")
+        assert not hasattr(code_impact, "_reindex_dirty")
+        assert not hasattr(code_search, "_reindex_dirty_if_needed")
+
+
 class TestResolver:
     def test_resolve_references(self, project_with_code):
         """Test that references get resolved to symbols."""

@@ -1,10 +1,13 @@
 """CogniLayer PostToolUse hook — logs file changes. Must be <100ms."""
 
 import json
+import logging
 import sys
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+
+_log = logging.getLogger("cognilayer.hooks.on_file_change")
 
 COGNILAYER_HOME = Path.home() / ".cognilayer"
 DB_PATH = COGNILAYER_HOME / "memory.db"
@@ -89,17 +92,17 @@ def main():
                 UPDATE code_files SET is_dirty = 1
                 WHERE project = ? AND file_path = ?
             """, (project_name, rel_path))
-        except Exception:
-            pass
+        except sqlite3.OperationalError:
+            pass  # code_files table may not exist yet
 
         db.commit()
-    except Exception:
-        pass
+    except sqlite3.OperationalError as e:
+        _log.debug("on_file_change DB write failed: %s", e)
     finally:
         if db:
             try:
                 db.close()
-            except Exception:
+            except sqlite3.OperationalError:
                 pass
 
 

@@ -169,8 +169,8 @@ def _get_linked_facts(db, results: list) -> dict:
             """, (r["id"], r["id"], r["id"])).fetchall()
             if rows:
                 linked_map[r["id"]] = [{"id": row[0], "content": row[1]} for row in rows]
-        except Exception:
-            pass  # fact_links table might not exist yet
+        except sqlite3.OperationalError:
+            break  # fact_links table might not exist — skip remaining
     return linked_map
 
 
@@ -210,8 +210,8 @@ def _get_causal_chains(db, results: list) -> dict:
                 })
             if chains:
                 chain_map[r["id"]] = chains[:2]
-        except Exception:
-            pass  # causal_chains table might not exist yet
+        except sqlite3.OperationalError:
+            break  # causal_chains table might not exist — skip remaining
     return chain_map
 
 
@@ -301,8 +301,8 @@ def memory_search(query: str, scope: str = "project",
         _trace("START knowledge_gap")
         try:
             _log_knowledge_gap(db, query, project, type, results)
-        except Exception:
-            pass
+        except sqlite3.OperationalError:
+            _trace("knowledge_gap SKIPPED (table missing or locked)")
         _trace("knowledge_gap DONE")
 
         # Fetch linked facts and causal chains for display (read-only)
