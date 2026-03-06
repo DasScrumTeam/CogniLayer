@@ -1,0 +1,62 @@
+# CogniLayer Secure Docker Compose — Hybrid Mode
+#
+# Architecture:
+#   - MCP server runs INSIDE Docker (isolated, no network, read-only FS)
+#   - Hooks run on HOST (smooth UX: CLAUDE.md injection, file tracking)
+#   - Both share the same SQLite DB via bind mount
+#   - Hooks are hardened with content sanitization (sanitize.py)
+#
+# Usage:
+#   docker compose -f docker/docker-compose.yml up -d
+
+services:
+  cognilayer:
+    container_name: cognilayer
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+
+    # SECURITY: No network access at all
+    network_mode: none
+
+    # SECURITY: Read-only root filesystem
+    read_only: true
+
+    # SECURITY: Drop all Linux capabilities
+    cap_drop:
+      - ALL
+
+    # SECURITY: Prevent privilege escalation
+    security_opt:
+      - no-new-privileges:true
+
+    # SECURITY: Memory limit (prevents DoS via large indexes)
+    mem_limit: 512m
+    memswap_limit: 512m
+
+    # SECURITY: CPU limit
+    cpus: "1.0"
+
+    # tmpfs for Python __pycache__ (read-only FS needs this)
+    tmpfs:
+      - /tmp:size=64M,noexec,nosuid
+
+    volumes:
+      # Shared DB: bind mount so host hooks and container MCP share the same SQLite
+      - ~/.cognilayer:/data
+
+      # Mount project directories READ-ONLY for code indexing
+      # Uncomment and adjust paths as needed:
+      # - ~/projects:/projects:ro
+
+    # Override DB/log paths to use /data (bind-mounted ~/.cognilayer)
+    environment:
+      - COGNILAYER_DATA_DIR=/data
+
+    # Keep container running for exec-based MCP access
+    stdin_open: true
+    tty: false
+
+    # Run as non-root user (matches Dockerfile USER)
+    user: "10001:10001"

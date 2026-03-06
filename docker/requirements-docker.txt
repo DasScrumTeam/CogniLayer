@@ -1,0 +1,13 @@
+# Core dependencies (pinned for reproducibility)
+mcp>=1.0.0,<2.0.0
+pyyaml>=6.0,<7.0
+
+# Optional: vector search (comment out to reduce image size)
+# fastembed>=0.3.0,<1.0.0
+# sqlite-vec>=0.1.0,<1.0.0
+
+# Optional: code intelligence (comment out to reduce image size)
+# tree-sitter-language-pack>=0.1.0,<1.0.0
+
+# TUI is not needed in Docker (no terminal)
+# textual
